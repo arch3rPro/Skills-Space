@@ -519,3 +519,5 @@ The user authorized scoped Pi package inventory, installation/removal, existing 
 后续构建`41430691986`已通过资源准备；Windows前端测试揭示Pi路径问题：测试夹具以Unix分隔符识别全局配置导致项目信任默认值被意外清除，另有规则路径断言写死分隔符；同时Git根比较改用系统原生realpath展开Windows短路径，返回原有根路径拼写以保持技能文件／恢复记录的匹配。staging后Pi定向50项：48通过、2项原宿主限定跳过、0失败；新增Git根直接识别和嵌套包归属边界回归。Windows真实短／长路径结果待专用构建验证；其他平台原任务继续，不重复成功安装包。
 
 Windows专项`41431497384`已通过全部Pi测试，验证Git短路径修复；随后仅DSH私有文件可编辑测试失败，原因是隔离HOME未规范化而触发文件别名保护。夹具改为realpath(mkdtemp)，未放宽生产保护；DSH定向38项：8通过、30原宿主限定跳过。仅Windows继续专项验证，macOS／Linux原任务不重跑。
+
+Windows专项`41432030219`前端全通过；原生测试编译发现两个原本ignored的Unix shell测试缺cfg(unix)，以及链接清理测试只调用Unix symlink。按真实平台能力补测试限定及Windows链接创建／删除分支，保留替换目录不得删除的断言。构建增加失败时保存Rust依赖缓存，避免测试错误导致依赖编译缓存丢失。实际Windows原生结果待下一次专项验证，其他平台不重复触发。

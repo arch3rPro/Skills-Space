@@ -1688,13 +1688,19 @@ mod tests {
         op.source = None;
         op.agents = vec!["claude-code".into()];
         op.removals = Some(super::removal_plan(&e, &op).unwrap().unwrap());
+        #[cfg(unix)]
         fs::remove_file(&target).unwrap();
+        #[cfg(windows)]
+        fs::remove_dir(&target).unwrap();
         fs::create_dir(&target).unwrap();
         fs::write(target.join("keep"), "replacement").unwrap();
         assert_eq!(apply(&e, &op).unwrap().items[0].status, "failed");
         assert!(target.join("keep").is_file());
         fs::remove_dir_all(&target).unwrap();
+        #[cfg(unix)]
         std::os::unix::fs::symlink(&o.path, &target).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&o.path, &target).unwrap();
         assert_eq!(apply(&e, &op).unwrap().items[0].status, "complete");
         assert!(absent(&target));
         assert!(read(&e).unwrap().records.is_empty());

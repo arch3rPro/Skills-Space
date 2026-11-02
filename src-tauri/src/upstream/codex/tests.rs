@@ -812,6 +812,7 @@ fn portable_plugin_uses_fixed_components_and_openai_overlay() {
     assert_eq!(data["hooks"], "./hooks.json");
 }
 
+#[cfg(unix)]
 #[test]
 #[ignore = "Requires explicitly selected original Codex CLI; isolated slow catalog"]
 fn agent_inventory_does_not_wait_for_remote_catalog() {
@@ -947,6 +948,7 @@ fn bundled_plugin_actions_use_native_policy() {
     assert!(source.join("skills/one/SKILL.md").is_file());
 }
 
+#[cfg(unix)]
 #[test]
 #[ignore = "Requires original Codex CLI for config; remote transport is an isolated fixture"]
 fn catalog_lifecycle_rechecks_native_inventory_and_rejects_fake_toggle() {

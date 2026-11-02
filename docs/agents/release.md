@@ -14,7 +14,7 @@ The matrix covers macOS arm64 (macos-15), macOS x64 (macos-15-intel), Windows x6
 
 `fail-fast: false` lets other platforms finish after one fails. For transient failures, use **Re-run failed jobs** or `gh run rerun RUN_ID --failed`; successful jobs and their artifacts are retained. A run containing only one platform is useful for diagnosis, but cannot produce the complete release draft. An explicit full rerun replaces that platform's artifact.
 
-A rerun uses the original commit and workflow, not newer fixes. If code or workflow changes, start a new build of the new commit. Do not mix old successful binaries with new source. Dependency caches speed the new build but are not proof that an old installer is valid.
+A rerun uses the original commit and workflow, not newer fixes. If code or workflow changes, start a new build of the new commit. Do not mix old successful binaries with new source. Rust dependency caches are also saved on failed jobs to reduce recompilation during repairs. Dependency caches speed the new build but are not proof that an old installer is valid.
 
 ## Release notes
 
