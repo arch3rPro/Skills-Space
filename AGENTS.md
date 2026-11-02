@@ -11,6 +11,8 @@ Skills Space is a Tauri desktop client for personal skill management across Agen
 
 ## Workflow and presentation
 
+**Chinese terminology:** Describe test fixtures as 测试数据, 模拟配置 or 隔离测试环境 according to their actual role. Describe assertions as 检查项, 校验 or 预期结果 according to context. Keep code/API identifiers in their original language. Apply natural Chinese to user communication, product copy and new documentation; do not use literal translations of these technical terms.
+
 - **No overengineering:** implement the smallest complete solution for the current authorized need and reuse existing flows. Do not add abstractions, storage, verification gates, UI or fallback workflows for hypothetical risks. Missing auxiliary records must not permanently block a core action; distinguish confirmed conflicts from unknown state and use the existing confirmation flow when uncertainty requires a user decision.
 
 Follow [CLAUDE.md](CLAUDE.md), the shared development process. UI work also follows the required design skills in [skill usage](docs/agents/skill-usage.md); other methods are user-selected. The post-implementation delegation below is selected for this project; other multi-agent workflows and TDD require explicit selection or a selected skill's applicable requirement.
@@ -41,6 +43,10 @@ Apply the global independent-quality-review rules to each handoff. Before substa
 The two post-implementation reviewers independently inspect requirements and behavior; the parent must not narrow their assignment to confirming its own fixes. Each reviewer returns one consolidated actionable finding list, including related defects in the affected flow. The parent resolves findings together before the next build/recheck, with immediate handling of critical defects. Recheck invalidated evidence only. An unresolved material usability or functional defect fails task acceptance; document a blocked or unverified state precisely instead of declaring overall completion. Documentation-only instruction changes require reference/consistency checks, not runtime builds or reviewer delegation.
 
 ## Required checks
+
+Native verification starts with the affected checks; `pnpm test:native` selects the critical scope, including fast independent data checks. Use `pnpm test:native:full` only for a named coverage need. Adding checks requires an actual uncovered user outcome or external contract; consolidate existing coverage before adding a near-duplicate. Do not move expensive checks elsewhere and call that test simplification.
+
+For cross-platform path, process or test changes, follow [cross-platform failure review](docs/agents/development.md#cross-platform-failure-review) before dispatching installer builds. Record compiler and native-test evidence for each affected platform; results from one OS cover that OS only.
 
 Resolve versions and scripts from manifests and lockfiles. Retain TypeScript strictness and Rust compiler checks; resolve type errors without unchecked casts. Apply size-based application verification in [development guidance](docs/agents/development.md); organize local code commits by completed, verified change units as described in [CLAUDE.md](CLAUDE.md).
 

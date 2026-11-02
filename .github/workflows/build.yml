@@ -8,6 +8,11 @@ on:
         type: choice
         default: all
         options: [all, macos-arm64, macos-x64, windows-x64, linux-x64]
+      native-tests:
+        description: Native verification scope
+        type: choice
+        default: critical
+        options: [critical, full]
 
 permissions:
   contents: read
@@ -69,8 +74,14 @@ jobs:
         run: pnpm stage:upstream
       - name: Frontend contract tests
         run: pnpm test:frontend-contracts
-      - name: Native tests (before packaging)
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target "${{ matrix.target }}" --lib -- --test-threads=1
+      - name: Compile native tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target "${{ matrix.target }}" --lib --no-run
+      - name: Run selected native checks (before packaging)
+        timeout-minutes: ${{ inputs.native-tests == 'full' && 40 || 10 }}
+        env:
+          NATIVE_TEST_SCOPE: ${{ inputs.native-tests }}
+          NATIVE_TEST_TARGET: ${{ matrix.target }}
+        run: node scripts/test-native-ci.mjs "$NATIVE_TEST_SCOPE" "$NATIVE_TEST_TARGET"
       - name: Build installers (includes resource staging and frontend compilation)
         env:
           APPLE_SIGNING_IDENTITY: '-'

@@ -118,3 +118,5 @@
 - [Codex 实现整体复查](research/codex-implementation-audit-2026-10-21.md)：用户反馈后的界面职责、插件启停、来源覆盖与验收缺口；更正上一轮完成结论。
 
 - [Codex 全面对账与分批修复](research/codex-implementation-reconciliation-2026-10-22.md)：已批准职责、33 项行为对账、10 项追加内容、B1–B6 依赖与验收、接口待核实项；B1–B4 已实施，B5/B6 最新状态以该文档当前批次表为准。
+
+- [现有测试去重与精简](research/test-suite-rationalization-2026-11-03.md)：全部文件去留、重复覆盖迁移、实际流程削减和前后数量/耗时；2026-11-03本地结果，跨平台与原Agent专项边界单独保留。
