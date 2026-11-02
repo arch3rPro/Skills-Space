@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync,symlinkSync,readFileSync,readdirSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,relative} from 'node:path';
 import {inspectPiSkills,readProjectTrust} from '../src-tauri/resources/upstream/inspect-pi-skills.mjs';
 function fixture(t){const root=mkdtempSync(join(tmpdir(),'pi-skills-contract-'));t.after(()=>rmSync(root,{recursive:true,force:true}));const home=join(root,'home');mkdirSync(home,{recursive:true});const agent=join(home,'.pi/agent');settings(agent,{defaultProjectTrust:'always'});return {root,home,agent};}
 function skill(root,name){const path=join(root,name);mkdirSync(path,{recursive:true});const file=join(path,'SKILL.md');writeFileSync(file,`---\nname: ${name}\ndescription: Fixture\n---\nUnchanged\n`);return file;}
-function settings(agent,data){mkdirSync(agent,{recursive:true});writeFileSync(join(agent,'settings.json'),JSON.stringify({...((agent.endsWith('/.pi/agent') && data.defaultProjectTrust===undefined)?{defaultProjectTrust:'always'}:{}),...data}));}
+function settings(agent,data){mkdirSync(agent,{recursive:true});writeFileSync(join(agent,'settings.json'),JSON.stringify({...((agent.endsWith(join('.pi','agent')) && data.defaultProjectTrust===undefined)?{defaultProjectTrust:'always'}:{}),...data}));}
 test('Pi native exact and glob overrides take precedence without changing skill files',t=>{
  const f=fixture(t),file=skill(join(f.home,'.agents/skills'),'alpha'),original=readFileSync(file);
  settings(f.agent,{skills:['!alpha',`+${file}`,`-${file}`]});let s=inspectPiSkills(f.home,f.agent);assert.equal(s.skills[0].enabled,false);assert.deepEqual(s.skills[0].blockingRules,[`-${file}`]);assert.equal(s.skills[0].cliAddressable,true);
@@ -165,7 +165,7 @@ test('trust follows remembered nearest parents and Pi defaults without writing t
 });
 test('an enabled symlink alias is not consumed by its disabled physical peer',t=>{
  const f=fixture(t);skill(join(f.agent,'skills'),'a');symlinkSync(join(f.agent,'skills/a'),join(f.agent,'skills/z'),'dir');settings(f.agent,{skills:['-skills/a']});
- const rows=inspectPiSkills(f.home,f.agent).skills;assert.equal(rows.length,1);assert.equal(rows[0].enabled,true);assert(rows[0].rulePath.includes('/z/'));
+ const rows=inspectPiSkills(f.home,f.agent).skills;assert.equal(rows.length,1);assert.equal(rows[0].enabled,true);assert.equal(relative(join(f.agent,'skills'),rows[0].rulePath),join('z','SKILL.md'));
 });
 test('CR frontmatter matches Pi recognition and keeps the byte revision',t=>{
  const f=fixture(t),file=skill(join(f.agent,'skills'),'cr');writeFileSync(file,'---\rname: cr\rdescription: Fixture\r---\rBody');

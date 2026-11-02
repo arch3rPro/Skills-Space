@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,realpathSync,chm
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {field,patch,plan,observe,digest,localState} from '../src-tauri/resources/upstream/pi-invocation-state.mjs';
+import {field,patch,plan,observe,digest,localState,sourceInfo} from '../src-tauri/resources/upstream/pi-invocation-state.mjs';
 const body=(token=null,text='Body')=>`---\n# Preserve comments\nname: demo\ndescription: Demo\n${token===null?'':`disable-model-invocation: ${token}\n`}future: keep\n---\n${text}\n`;
 function fixture(git=false) {
  const root=realpathSync(mkdtempSync(join(tmpdir(),'ss-invocation-'))),pkg=join(root,'pkg'),file=join(pkg,'skills/demo/SKILL.md');mkdirSync(dirname(file),{recursive:true});writeFileSync(file,body());writeFileSync(join(pkg,'support.txt'),'original');
@@ -13,6 +13,24 @@ function fixture(git=false) {
  return {root,pkg,file,run,item:{file,packageRoot:git?pkg:null,packageSource:git?'git:https://fixture.invalid/repo':null,name:'demo'},state:{version:1,records:{}}};
 }
 function apply(f,mode){const result=plan(f.item,f.state,mode);writeFileSync(f.file,result.after);f.state.records[f.file]={...result.record,phase:'committed'};return result;}
+test('Git package roots use physical identity while retaining the item path spelling',t=>{
+ const f=fixture(true);t.after(()=>rmSync(f.root,{recursive:true,force:true}));
+ const gitRoot=f.run('rev-parse','--show-toplevel').trimEnd(),source=sourceInfo(f.item);
+ const diagnostic=JSON.stringify({itemRoot:f.pkg,gitRoot,nativeRoot:realpathSync.native(f.pkg),nativeGitRoot:realpathSync.native(gitRoot)});
+ assert.equal(source.kind,'git',diagnostic);assert.equal(source.reliable,true);
+ assert.equal(source.root,realpathSync(f.pkg),'Record and item paths retain the same root spelling');
+ assert.equal(source.identity,`git:${digest('https://fixture.invalid/repo')}`);
+ assert.equal(source.version,f.run('rev-parse','HEAD').trimEnd());
+ assert.equal(realpathSync.native(source.root),realpathSync.native(gitRoot));
+});
+test('nested skill folders and unowned enclosing repositories remain local sources',t=>{
+ const f=fixture(true);t.after(()=>rmSync(f.root,{recursive:true,force:true}));
+ const nested=sourceInfo({...f.item,packageRoot:dirname(f.file)});
+ assert.equal(nested.kind,'local');assert.equal(nested.reliable,false);
+ assert.equal(nested.root,realpathSync(dirname(f.file)));
+ const unowned=sourceInfo({...f.item,packageSource:null});
+ assert.equal(unowned.kind,'local');assert.equal(unowned.reliable,false);
+});
 test('automatic false, manual true and absent/false/true/quoted defaults preserve body and unrelated YAML',()=>{
  for(const original of [null,'false','true','"true"']) {
   const before=body(original);assert.equal(field(before).token,original);

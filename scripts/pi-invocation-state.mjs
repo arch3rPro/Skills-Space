@@ -119,9 +119,10 @@ export function sourceInfo(item,installations={}) {
     const cwd=statSync(root).isDirectory()?root:dirname(root);
     const gitRoot=realpathSync(git(cwd,['rev-parse','--show-toplevel']));
     // A user's enclosing project is not an owned package; it remains read-only.
-    if (!item.packageSource || realpathSync(root)!==gitRoot) throw Error();
+    // Native realpath expands Windows short paths before comparing repository identity.
+    if (!item.packageSource || realpathSync.native(root)!==realpathSync.native(gitRoot)) throw Error();
     const origin=git(gitRoot,['config','--get','remote.origin.url']);
-    return {kind:'git',root:gitRoot,identity:`git:${digest(origin)}`,version:git(gitRoot,['rev-parse','HEAD']),reliable:true};
+    return {kind:'git',root,identity:`git:${digest(origin)}`,version:git(gitRoot,['rev-parse','HEAD']),reliable:true};
   }catch{return {kind:'local',root,identity:`file:${root}`,version:null,reliable:false};}
 }
 function sourceToken(file,source,fallback,installations={}) {
