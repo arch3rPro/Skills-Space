@@ -1,0 +1,69 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Private references and temporary working material stay local.
+reference/
+# Version Markdown contracts, guides, research and explicitly marked history.
+# Other docs artifacts stay ignored unless deliberately allowlisted.
+docs/*
+!docs/README.md
+!docs/agents/
+!docs/design/
+!docs/specs/
+!docs/research/
+!docs/adr/
+docs/agents/*
+!docs/agents/*.md
+docs/design/*
+!docs/design/*.md
+docs/specs/*
+!docs/specs/*.md
+docs/research/*
+!docs/research/*.md
+docs/adr/*
+!docs/adr/*.md
+!docs/archive/
+docs/archive/*
+!docs/archive/*.md
+.pnpm-store/
+.scratch/
+.worktrees/
+.superpowers/
+.cache/
+
+# Local Pi configuration and TypeScript-emitted build artifacts.
+/.pi/settings.json
+/*.tsbuildinfo
+/vite.config.js
+/vite.config.d.ts
+
+# Local credentials and environment overrides are not publication inputs.
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx

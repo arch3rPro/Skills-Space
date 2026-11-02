@@ -1,0 +1,10 @@
+{
+  "name": "@skills-space/dsh-skill-policy",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "files": ["index.mjs", "state.mjs", "cordis.patch.yml"],
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}},
+  "engines": {"node": ">=22.20.0", "dsh": ">=0.2.1-rc.5 <0.3.0-0"}
+}

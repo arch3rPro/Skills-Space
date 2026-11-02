@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "beautify-github-readme": {
+      "source": "oil-oil/beautify-github-readme",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/beautify-github-readme/SKILL.md",
+      "computedHash": "a001f90f96cc1e65380bc7f86b41516e0bc6c496f4d6c920fe3181fcd3d45856"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "da388f632cd83783c02967446e21941c9ee8291ccb43ba74c23f7d4e9b7c298c"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "3219a1944e404ffc14d1d9d6aef6dd2e3855b81387ee0a044ccbfe14d34c2357"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+    }
+  }
+}
