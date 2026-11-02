@@ -536,13 +536,13 @@ pub(super) fn resolve(app: &AppHandle) -> Result<PathBuf, String> {
 }
 #[cfg(test)]
 pub(super) fn test_node() -> PathBuf {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_default();
-    candidates(&home)
-        .into_iter()
-        .find_map(|p| probe_runtime(&p).ok().filter(|v| compatible(&v.version)).map(|v| v.executable))
-        .expect("Native fixtures require Node >=22.20.0")
+    static RUNTIME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        candidates(&home).into_iter()
+            .find_map(|p| probe_runtime(&p).ok().filter(|v| compatible(&v.version)).map(|v| v.executable))
+            .expect("Native tests require Node >=22.20.0")
+    }).clone()
 }
 #[tauri::command]
 pub async fn application_node_status(app: AppHandle) -> Result<Status, String> {

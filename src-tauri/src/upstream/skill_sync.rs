@@ -315,7 +315,7 @@ fn origin_record(engine: &Engine, origin: &Origin) -> Result<Skill, String> {
         .inventory(&origin.target)?
         .skills
         .into_iter()
-        .find(|s| s.path == origin.path && s.name == origin.name)
+        .find(|s| Path::new(&s.path) == Path::new(&origin.path) && s.name == origin.name)
         .ok_or_else(|| "Sync origin is no longer installed. Refresh and check again.".into())
 }
 fn local_inspection(engine: &Engine, origin: &Origin, skill: &Skill) -> Result<Inspection, String> {
@@ -1604,7 +1604,10 @@ mod tests {
         assert_eq!(result.iter().filter(|i| i.status == "failed").count(), 1);
         assert_eq!(result.iter().filter(|i| i.status == "complete").count(), 1);
         let failed = result.iter().find(|i| i.status == "failed").unwrap();
-        assert_eq!(failed.destination.as_deref(), claude.to_str());
+        assert_eq!(
+            failed.destination.as_deref().map(Path::new),
+            Some(claude.as_path())
+        );
         assert_eq!(failed.agents, vec!["claude-code"]);
         assert_eq!(
             fs::read_to_string(claude.join("references/one.txt")).unwrap(),
@@ -1685,7 +1688,7 @@ mod tests {
         assert!(inventory
             .skills
             .iter()
-            .any(|s| s.path == target.to_string_lossy()));
+            .any(|s| Path::new(&s.path) == target));
         let mut op = addition(Path::new(&o.path), global(), false);
         op.action = "remove".into();
         op.source = None;

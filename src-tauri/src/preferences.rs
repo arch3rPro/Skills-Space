@@ -226,9 +226,8 @@ pub fn upstream_save_preferences(
 mod tests {
     use super::*;
     #[test]
-    fn store_page_size_defaults_for_older_preferences_and_round_trips_without_losing_other_fields() {
-        let old:Preferences=serde_json::from_str(r#"{"theme":"dark","language":"zh-CN","projects":["/tmp/project"],"hiddenAgents":["codex"]}"#).unwrap();
-        assert_eq!(old.store_page_size,12);assert_eq!(Preferences::default().store_page_size,12);
+    fn store_page_sizes_round_trip_without_losing_other_fields() {
+        let old = Preferences {theme:"dark".into(), hidden_agents:vec!["codex".into()], projects:vec![Project{path:"/tmp/project".into(),name:"project".into(),icon:"folder".into()}], ..Preferences::default()};
         for size in [12,24,48] {
             let prefs=Preferences{store_page_size:size,..old.clone()};let bytes=serde_json::to_vec_pretty(&prefs).unwrap();let json:serde_json::Value=serde_json::from_slice(&bytes).unwrap();assert_eq!(json["storePageSize"],size);
             let restored:Preferences=serde_json::from_slice(&bytes).unwrap();assert_eq!(restored.store_page_size,size);assert_eq!(restored.projects,old.projects);assert_eq!(restored.hidden_agents,old.hidden_agents);assert_eq!(restored.theme,old.theme);
@@ -237,7 +236,7 @@ mod tests {
 
     #[test]
     fn old_preferences_add_design_defaults_without_losing_projects() {
-        let p: Preferences = serde_json::from_str(r#"{"theme":"dark","language":"zh-CN","projects":["/tmp/project"],"hiddenAgents":["codex"]}"#).unwrap();
+        let p: Preferences = serde_json::from_str(r#"{"theme":"dark","language":"en","projects":["/tmp/project"],"hiddenAgents":["codex"],"visibleAgents":["pi"],"hideUnmanageableCodexPlugins":true}"#).unwrap();
         assert_eq!(p.theme, "dark");
         assert_eq!(p.color_theme, "codex");
         assert_eq!(p.font_family, "system");
@@ -253,6 +252,11 @@ mod tests {
         assert!(p.collapsed_sections.is_empty());
         assert_eq!(p.hidden_agents, vec!["codex"]);
         assert!(valid_appearance(&p));
+        assert_eq!(p.language, "en");assert_eq!(p.install_mode, InstallMode::Symlink);
+        assert_eq!(p.store_page_size, 12);assert!(p.agent_order.is_empty() && p.dsh_contexts.is_empty());
+        assert_eq!(p.visible_agents, vec!["pi"]);
+        assert!(serde_json::to_value(&p).unwrap().get("hideUnmanageableCodexPlugins").is_none());
+
     }
     #[test]
     fn nine_palettes_and_font_settings_round_trip() {
@@ -306,20 +310,11 @@ mod tests {
 mod order_tests {
     use super::*;
     #[test]
-    fn agent_order_round_trips_and_old_preferences_preserve_defaults() {
-        let old: Preferences = serde_json::from_str(r#"{"theme":"dark","language":"zh-CN","projects":[],"hiddenAgents":[],"visibleAgents":["pi"],"hideUnmanageableCodexPlugins":true}"#).unwrap();
-        assert!(old.agent_order.is_empty());
-        let ordered = Preferences {
-            agent_order: vec!["pi".into(), "codex".into(), "eve".into()],
-            ..old
-        };
+    fn agent_order_round_trips_with_visible_agents() {
+        let ordered = Preferences {agent_order:vec!["pi".into(),"codex".into(),"eve".into()], visible_agents:vec!["pi".into()], theme:"dark".into(), ..Preferences::default()};
         let saved = serde_json::to_vec(&ordered).unwrap();
         let restored: Preferences = serde_json::from_slice(&saved).unwrap();
         assert_eq!(restored.agent_order, ordered.agent_order);
-        assert!(serde_json::to_value(&restored)
-            .unwrap()
-            .get("hideUnmanageableCodexPlugins")
-            .is_none());
         assert_eq!(restored.visible_agents, vec!["pi"]);
         assert_eq!(restored.theme, "dark");
     }
@@ -354,16 +349,7 @@ mod project_tests {
 #[cfg(test)]
 mod install_mode_tests {
     use super::*;
-    #[test]
-    fn old_preferences_default_to_symlink_without_losing_other_settings() {
-        let p: Preferences = serde_json::from_str(
-            r#"{"theme":"dark","language":"en","projects":[],"hiddenAgents":["codex"]}"#,
-        )
-        .unwrap();
-        assert_eq!(p.install_mode, InstallMode::Symlink);
-        assert_eq!(p.language, "en");
-        assert_eq!(p.hidden_agents, vec!["codex"]);
-    }
+
     #[test]
     fn install_modes_round_trip_and_invalid_modes_are_rejected() {
         for mode in [InstallMode::Symlink, InstallMode::Copy] {
@@ -378,13 +364,8 @@ mod install_mode_tests {
         assert!(serde_json::from_str::<Preferences>(r#"{"theme":"dark","language":"en","projects":[],"hiddenAgents":[],"installMode":"other"}"#).is_err());
     }
     #[test]
-    fn dsh_management_contexts_preserve_scope_isolation_and_old_preferences() {
-        let legacy: Preferences = serde_json::from_str(
-            r#"{"theme":"dark","language":"zh-CN","projects":[],"hiddenAgents":[]}"#,
-        )
-        .unwrap();
-        assert!(legacy.dsh_contexts.is_empty());
-        let mut saved = legacy;
+    fn dsh_management_contexts_preserve_scope_isolation() {
+        let mut saved = Preferences {theme:"dark".into(), language:"zh-CN".into(), ..Preferences::default()};
         saved.dsh_contexts.insert(
             "settings".into(),
             Some("desktop:profile-web:preset-alpha".into()),

@@ -935,9 +935,9 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn original_use_agent_has_tty_accepts_input_and_preserves_exit_status() {
+        let (_f, e, source, cache, project) = fixture();
+        fake_agent(&e,"import{writeFileSync}from'node:fs';import{createInterface}from'node:readline';writeFileSync(process.env.HOME+'/agent-start.json',JSON.stringify({args:process.argv.slice(2),inputTTY:!!process.stdin.isTTY,outputTTY:!!process.stdout.isTTY,cwd:process.cwd()}));const r=createInterface({input:process.stdin,output:process.stdout});r.once('line',line=>{writeFileSync(process.env.HOME+'/reply',line);r.close();process.exit(7);});");
         for agent in ["codex", "claude-code", "sarvam-code"] {
-            let (_f, e, source, cache, project) = fixture();
-            fake_agent(&e,"import{writeFileSync}from'node:fs';import{createInterface}from'node:readline';writeFileSync(process.env.HOME+'/agent-start.json',JSON.stringify({args:process.argv.slice(2),inputTTY:!!process.stdin.isTTY,outputTTY:!!process.stdout.isTTY,cwd:process.cwd()}));const r=createInterface({input:process.stdin,output:process.stdout});r.once('line',line=>{writeFileSync(process.env.HOME+'/reply',line);r.close();process.exit(7);});");
             let plan = prepare(
                 &e,
                 &cache,
@@ -945,6 +945,12 @@ mod tests {
             )
             .unwrap();
             let path = root(&cache, &plan.id).unwrap();
+            let request: Request = read(&path.join("request.json")).unwrap();
+            assert!(request.args.windows(2).any(|args|args[0] == "--agent" && args[1] == agent));
+            let command = if agent == "claude-code" { "claude" } else { agent };
+            assert_eq!(Path::new(request.agent_command.as_deref().unwrap()).file_name().and_then(|name|name.to_str()), Some(command));
+            if agent != "codex" { continue; }
+
             let mut child = Command::new("/usr/bin/script")
                 .args(["-q", "/dev/null"])
                 .arg(path.join("Launch.command"))

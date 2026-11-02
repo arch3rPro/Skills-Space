@@ -469,7 +469,7 @@ fn prepare_cached(
             .ok_or("Missing discovery properties.")?;
         let remote = remote_source.is_some();
         if !remote && !options.copy {
-            observed_paths.insert(fs::canonicalize(&source).map_err(|e| e.to_string())?);
+            observed_paths.insert(dunce::canonicalize(&source).map_err(|e| e.to_string())?);
         }
         let signature = source_install_signature(&source)
             .ok_or("Dependency source cannot be fully verified.")?;
@@ -747,16 +747,16 @@ fn install(engine: &Engine, confirmed: &DependencyPlan) -> Result<DependencyResu
         .items
         .iter()
         .filter(|i| i.action == "install")
-        .flat_map(|i| i.destinations.iter().map(|d| d.before.path.as_str()))
+        .flat_map(|i| i.destinations.iter().map(|d| PathBuf::from(&d.before.path)))
         .chain(
             confirmed
                 .removals
                 .iter()
-                .flat_map(|r| r.paths.iter().map(|p| p.path.as_str())),
+                .flat_map(|r| r.paths.iter().map(|p| PathBuf::from(&p.path))),
         )
         .collect();
     for before in &confirmed.observed {
-        if changing.contains(before.path.as_str()) {
+        if changing.contains(Path::new(&before.path)) {
             continue;
         }
         let after = observe(engine, Path::new(&before.path));
@@ -764,7 +764,7 @@ fn install(engine: &Engine, confirmed: &DependencyPlan) -> Result<DependencyResu
             && after.kind == "link"
             && before.link_target == after.link_target
             && link_destination(Path::new(&before.path))
-                .is_some_and(|p| changing.contains(p.to_string_lossy().as_ref()));
+                .is_some_and(|p| changing.contains(p.as_path()));
         if !affected_link && (after != *before || before.kind != "missing" && before.hash.is_none())
         {
             warnings.push(format!(
@@ -780,7 +780,10 @@ fn install(engine: &Engine, confirmed: &DependencyPlan) -> Result<DependencyResu
             if !changing
                 .iter()
                 .any(|root| Path::new(&skill.path).starts_with(root))
-                && !confirmed.observed.iter().any(|p| p.path == skill.path)
+                && !confirmed
+                    .observed
+                    .iter()
+                    .any(|p| Path::new(&p.path) == Path::new(&skill.path))
             {
                 warnings.push(format!(
                     "Additional installation outside the plan: {}",
@@ -1133,17 +1136,24 @@ mod tests {
         let p = t.directory(&e.home).unwrap();
         skill(&p.join("node_modules/pkg"), "dependency", "one");
         let plan = prepare(&e, &t, &ids(&["codex"])).unwrap().plan;
-        assert!(install(&e, &plan)
-            .unwrap()
-            .items
-            .iter()
-            .all(|r| r.status == "complete"));
+        let result = install(&e, &plan).unwrap();
+        assert!(
+            result.items.iter().all(|r| r.status == "complete"),
+            "items: {}; warnings: {:?}",
+            serde_json::to_string(&result.items).unwrap(),
+            result.warnings
+        );
         let plan = prepare(&e, &t, &ids(&["claude-code", "hermes-agent"]))
             .unwrap()
             .plan;
         assert_eq!(plan.items[0].action, "install");
         let result = install(&e, &plan).unwrap();
-        assert!(result.items.iter().all(|r| r.status == "complete"));
+        assert!(
+            result.items.iter().all(|r| r.status == "complete"),
+            "items: {}; warnings: {:?}",
+            serde_json::to_string(&result.items).unwrap(),
+            result.warnings
+        );
         let plan = prepare(&e, &t, &ids(&["claude-code", "hermes-agent"]))
             .unwrap()
             .plan;
@@ -1177,11 +1187,13 @@ mod tests {
         skill(&p.join("node_modules/pkg"), "dependency", "changed");
         assert!(install(&e, &plan).is_err());
         let plan = prepare(&e, &t, &ids(&["hermes-agent"])).unwrap().plan;
-        assert!(install(&e, &plan)
-            .unwrap()
-            .items
-            .iter()
-            .all(|r| r.status == "complete"));
+        let result = install(&e, &plan).unwrap();
+        assert!(
+            result.items.iter().all(|r| r.status == "complete"),
+            "items: {}; warnings: {:?}",
+            serde_json::to_string(&result.items).unwrap(),
+            result.warnings
+        );
     }
     #[test]
     fn explicit_source_conflicts_block_sync_and_preserve_copies_and_locks() {
@@ -1216,7 +1228,7 @@ mod tests {
         assert!(plan
             .observed
             .iter()
-            .find(|o| o.path == eve.to_string_lossy())
+            .find(|o| Path::new(&o.path) == eve)
             .unwrap()
             .hash
             .is_some());

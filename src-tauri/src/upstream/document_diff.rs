@@ -92,6 +92,17 @@ pub(super) fn compare(
             .ok_or("Source content exceeds the diff preview limit.")?,
     )?;
     let current = files(&local)?;
+    Ok(SkillDiff {
+        revision: expected.into(),
+        version,
+        files: compare_files(engine, original, current)?,
+    })
+}
+fn compare_files(
+    engine: &Engine,
+    original: BTreeMap<String, Vec<u8>>,
+    current: BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<DiffFile>, String> {
     let names: std::collections::BTreeSet<_> = original.keys().chain(current.keys()).collect();
     let mut result: Vec<_> = names
         .into_iter()
@@ -114,11 +125,7 @@ pub(super) fn compare(
         })
         .collect();
     if result.is_empty() {
-        return Ok(SkillDiff {
-            revision: expected.into(),
-            version,
-            files: result,
-        });
+        return Ok(result);
     }
     let temporary = TemporaryDirectory::new()?;
     for (directory, contents) in [("a", &original), ("b", &current)] {
@@ -183,11 +190,7 @@ pub(super) fn compare(
             }
         }
     }
-    Ok(SkillDiff {
-        revision: expected.into(),
-        version,
-        files: result,
-    })
+    Ok(result)
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -210,51 +213,7 @@ pub(super) fn restore(engine: &Engine, request: &RestoreFile) -> Result<String, 
             .as_deref()
             .ok_or("Source content exceeds the diff preview limit.")?,
     )?;
-    let current = files(&before)?;
-    if originals.get(&request.file) == current.get(&request.file) {
-        return Err("This file has no local difference.".into());
-    }
-    if request.file.chars().any(char::is_control)
-        || Path::new(&request.file)
-            .components()
-            .any(|p| !matches!(p, std::path::Component::Normal(_)))
-    {
-        return Err("Invalid restore path.".into());
-    }
-    let destination = root.join(&request.file);
-    for ancestor in destination.ancestors().take_while(|p| *p != root) {
-        if fs::symlink_metadata(ancestor)
-            .is_ok_and(|m| m.file_type().is_symlink() || m.permissions().readonly())
-        {
-            return Err("Restore path is linked or read-only.".into());
-        }
-    }
-    let _guard = pi::SettingsLock::acquire(&root)?;
-    if tree_signature(&root).as_ref() != Some(&before) {
-        return Err("Skill changed. Review the diff again.".into());
-    }
-    if let Some(bytes) = originals.get(&request.file) {
-        pi::write_bytes(&destination, bytes)?;
-    } else {
-        fs::remove_file(&destination).map_err(|e| e.to_string())?;
-    }
-    if originals
-        .get(&request.file)
-        .is_some_and(|bytes| fs::read(&destination).ok().as_ref() != Some(bytes))
-        || !originals.contains_key(&request.file) && destination.exists()
-    {
-        return Err("Restored file could not be verified.".into());
-    }
-    let after = tree_signature(&root).ok_or("Restored files could not be inspected.")?;
-    let mut expected = current;
-    if let Some(bytes) = originals.get(&request.file) {
-        expected.insert(request.file.clone(), bytes.clone());
-    } else {
-        expected.remove(&request.file);
-    }
-    if files(&after)? != expected {
-        return Err("File restored, but other files changed. Reopen the diff.".into());
-    }
+    let (after, _guard) = restore_file(&root, &before, &originals, &request.file)?;
     // Establish evidence only when every installed copy matches the verified
     // recorded source, exactly as a successful ordinary update check does.
     let _ = (|| -> Result<(), String> {
@@ -288,6 +247,61 @@ pub(super) fn restore(engine: &Engine, request: &RestoreFile) -> Result<String, 
     })();
     Ok(revision(&after))
 }
+// The caller retains the lock through the subsequent baseline refresh.
+fn restore_file(
+    root: &Path,
+    before: &[u8],
+    originals: &BTreeMap<String, Vec<u8>>,
+    file: &str,
+) -> Result<(Vec<u8>, pi::SettingsLock), String> {
+    let current = files(before)?;
+    if originals.get(file) == current.get(file) {
+        return Err("This file has no local difference.".into());
+    }
+    if file.chars().any(char::is_control)
+        || Path::new(&file)
+            .components()
+            .any(|p| !matches!(p, std::path::Component::Normal(_)))
+    {
+        return Err("Invalid restore path.".into());
+    }
+    let destination = root.join(&file);
+    for ancestor in destination.ancestors().take_while(|p| *p != root) {
+        if fs::symlink_metadata(ancestor)
+            .is_ok_and(|m| m.file_type().is_symlink() || m.permissions().readonly())
+        {
+            return Err("Restore path is linked or read-only.".into());
+        }
+    }
+    let guard = pi::SettingsLock::acquire(root)?;
+    if tree_signature(root).as_deref() != Some(before) {
+        return Err("Skill changed. Review the diff again.".into());
+    }
+    if let Some(bytes) = originals.get(file) {
+        pi::write_bytes(&destination, bytes)?;
+    } else {
+        fs::remove_file(&destination).map_err(|e| e.to_string())?;
+    }
+    if originals
+        .get(file)
+        .is_some_and(|bytes| fs::read(&destination).ok().as_ref() != Some(bytes))
+        || !originals.contains_key(file) && destination.exists()
+    {
+        return Err("Restored file could not be verified.".into());
+    }
+    let after = tree_signature(&root).ok_or("Restored files could not be inspected.")?;
+    let mut expected = current;
+    if let Some(bytes) = originals.get(file) {
+        expected.insert(file.to_owned(), bytes.clone());
+    } else {
+        expected.remove(file);
+    }
+    if files(&after)? != expected {
+        return Err("File restored, but other files changed. Reopen the diff.".into());
+    }
+    Ok((after, guard))
+}
+
 #[tauri::command]
 pub async fn upstream_skill_diff(
     app: AppHandle,
@@ -309,4 +323,73 @@ pub async fn upstream_skill_file_restore(
     tauri::async_runtime::spawn_blocking(move || restore(&Engine::from_app(&app)?, &request))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn file_changes_restore_and_stale_path_protection() {
+        let temporary = TemporaryDirectory::new().unwrap();
+        let engine = super::super::tests::engine(&temporary.0);
+        let root = temporary.0.join("installed");
+        fs::create_dir(&root).unwrap();
+        let original = BTreeMap::from([
+            ("SKILL.md".into(), b"# Original\n".to_vec()),
+            ("version.txt".into(), b"one".to_vec()),
+        ]);
+        for (name, bytes) in &original {
+            fs::write(root.join(name), bytes).unwrap();
+        }
+        fs::write(root.join("SKILL.md"), "# Local edit\n").unwrap();
+        fs::write(root.join("added.txt"), "one").unwrap();
+        fs::write(root.join("binary.dat"), [0, 1, 2]).unwrap();
+        fs::remove_file(root.join("version.txt")).unwrap();
+        let before = tree_signature(&root).unwrap();
+        let differences =
+            compare_files(&engine, original.clone(), files(&before).unwrap()).unwrap();
+        assert_eq!(differences.len(), 4);
+        let document = differences.iter().find(|f| f.path == "SKILL.md").unwrap();
+        assert!(document.diff.contains("-# Original") && document.diff.contains("+# Local edit"));
+        assert!(differences
+            .iter()
+            .any(|f| f.path == "added.txt" && f.status == "added" && f.diff.contains("+one")));
+        assert!(differences
+            .iter()
+            .any(|f| f.path == "version.txt" && f.status == "deleted" && f.diff.contains("-one")));
+        assert!(differences
+            .iter()
+            .any(|f| f.path == "binary.dat" && f.binary));
+        fs::write(root.join("added.txt"), "changed since review").unwrap();
+        assert!(restore_file(&root, &before, &original, "SKILL.md").is_err());
+        assert_eq!(
+            fs::read_to_string(root.join("SKILL.md")).unwrap(),
+            "# Local edit\n"
+        );
+        let before = tree_signature(&root).unwrap();
+        let unsafe_original = BTreeMap::from([("../outside".into(), b"untrusted".to_vec())]);
+        assert!(restore_file(&root, &before, &unsafe_original, "../outside").is_err());
+        assert!(!temporary.0.join("outside").exists());
+        for name in ["SKILL.md", "added.txt", "binary.dat", "version.txt"] {
+            let before = tree_signature(&root).unwrap();
+            let expected = files(&before).unwrap();
+            let (after, guard) = restore_file(&root, &before, &original, name).unwrap();
+            assert!(pi::SettingsLock::acquire(&root).is_err());
+            drop(guard);
+            drop(pi::SettingsLock::acquire(&root).unwrap());
+            let after = files(&after).unwrap();
+            for (other, bytes) in expected.iter().filter(|(other, _)| other.as_str() != name) {
+                assert_eq!(
+                    after.get(other),
+                    Some(bytes),
+                    "Unselected file changed: {other}"
+                );
+            }
+            assert_eq!(after.get(name), original.get(name));
+        }
+        assert_eq!(files(&tree_signature(&root).unwrap()).unwrap(), original);
+        assert!(compare_files(&engine, original.clone(), original)
+            .unwrap()
+            .is_empty());
+    }
 }

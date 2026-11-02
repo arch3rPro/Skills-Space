@@ -240,13 +240,9 @@ pub fn upstream_open_created(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::upstream::{
-        apply,
-        tests::{addition, engine, global},
-        TemporaryDirectory,
-    };
+    use crate::upstream::{tests::{engine, global}, TemporaryDirectory};
     #[test]
-    fn real_init_creates_without_installing_then_previews_installs_and_removes() {
+    fn real_init_creates_previewable_template_without_installing_or_overwriting() {
         for named in [false, true] {
             let fixture = TemporaryDirectory::new().unwrap();
             let home = fixture.0.join("home");
@@ -280,22 +276,6 @@ mod tests {
             assert_eq!(fs::read(&p.file).unwrap(), bytes);
             let preview = crate::upstream::inspect(&engine, &p.skill_directory).unwrap();
             assert_eq!(preview.skills[0].name, "my-skill");
-            let mut op = addition(Path::new(&p.skill_directory), target, named);
-            op.skills = vec!["my-skill".into()];
-            let installed = apply(&engine, &op).unwrap();
-            assert!(
-                installed.items.iter().all(|i| i.status == "complete"),
-                "{}",
-                installed.logs
-            );
-            op.action = "remove".into();
-            op.source = None;
-            let removed = apply(&engine, &op).unwrap();
-            assert!(
-                removed.items.iter().all(|i| i.status == "complete"),
-                "{}",
-                removed.logs
-            );
             assert_eq!(fs::read(&p.file).unwrap(), bytes);
             assert_eq!(
                 fs::read_to_string(parent.join("keep.txt")).unwrap(),

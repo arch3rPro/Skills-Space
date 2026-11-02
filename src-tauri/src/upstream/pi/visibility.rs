@@ -543,42 +543,31 @@ mod tests {
         write_settings(&config,&serde_json::json!({"skills":[extra.to_string_lossy()],"packages":[{"source":"./fixture-package","extensions":[],"future":true}],"future":"keep"})).unwrap();
         let paths = [native, extra_file, markdown, package_file, manifest, config];
         let originals: Vec<_> = paths.iter().map(|path| fs::read(path).unwrap()).collect();
-        for name in ["native", "extra", "standalone", "packaged"] {
-            let before = inspect(&e, &global()).unwrap();
+        let names = ["native", "extra", "standalone", "packaged"];
+        let before = inspect(&e, &global()).unwrap();
+        for name in names {
             let item = before.skills.iter().find(|item| item.name == name).unwrap();
             assert!(item.can_set_visibility && !item.cli_addressable);
-            let after = native_change(&e, named_request(before, name, true)).unwrap();
-            assert!(
-                after
-                    .skills
-                    .iter()
-                    .find(|item| item.name == name)
-                    .unwrap()
-                    .manual_only
-            );
-            let restarted = engine(&e.home);
-            assert!(
-                inspect(&restarted, &global())
-                    .unwrap()
-                    .skills
-                    .iter()
-                    .find(|item| item.name == name)
-                    .unwrap()
-                    .manual_only
-            );
-            let restored = native_change(
-                &e,
-                named_request(inspect(&e, &global()).unwrap(), name, false),
-            )
-            .unwrap();
-            assert!(
-                !restored
-                    .skills
-                    .iter()
-                    .find(|item| item.name == name)
-                    .unwrap()
-                    .manual_only
-            );
+        }
+        let batch = |snapshot: Snapshot, mode: &str| {
+            serde_json::from_value::<native::InvocationBatch>(serde_json::json!({
+                "target": snapshot.target,
+                "files": snapshot.skills.iter().filter(|item| names.contains(&item.name.as_str())).map(|item|serde_json::json!({"file":item.file,"revision":item.document_revision})).collect::<Vec<_>>(),
+                "dependencies": snapshot.dependencies,
+                "mode": mode,
+            })).unwrap()
+        };
+        let after = native::change_batch_for_test(&e, batch(before, "manual")).unwrap();
+        for name in names {
+            assert!(after.skills.iter().find(|item| item.name == name).unwrap().manual_only);
+        }
+        let restarted = inspect(&engine(&e.home), &global()).unwrap();
+        for name in names {
+            assert!(restarted.skills.iter().find(|item| item.name == name).unwrap().manual_only);
+        }
+        let restored = native::change_batch_for_test(&e, batch(restarted, "auto")).unwrap();
+        for name in names {
+            assert!(!restored.skills.iter().find(|item| item.name == name).unwrap().manual_only);
         }
         for (path, original) in paths.iter().zip(originals) {
             if path

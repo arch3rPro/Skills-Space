@@ -1198,6 +1198,13 @@ fn tree_signature(root: &Path) -> Option<Vec<u8>> {
 fn source_install_signature(root: &Path) -> Option<Vec<u8>> {
     bounded_signature(root, true)
 }
+// Relative paths in source metadata and signatures use a portable separator.
+fn relative_path_text(path: &Path) -> String {
+    path.components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
 fn bounded_signature(root: &Path, source: bool) -> Option<Vec<u8>> {
     signature_profile(root, if source { 1 } else { 0 })
 }
@@ -1245,12 +1252,7 @@ fn signature_profile(root: &Path, profile: u8) -> Option<Vec<u8>> {
                 if usize::try_from(entry.metadata().ok()?.len()).ok()? > MAX_SKILL_CONTENT_BYTES {
                     return None;
                 }
-                let name = entry
-                    .path()
-                    .strip_prefix(root)
-                    .ok()?
-                    .to_string_lossy()
-                    .into_owned();
+                let name = relative_path_text(entry.path().strip_prefix(root).ok()?);
                 let bytes = fs::read(entry.path()).ok()?;
                 if result.len() + bytes.len() + name.len() > MAX_SKILL_CONTENT_BYTES {
                     return None;
@@ -1378,11 +1380,11 @@ fn inspect_directory(
         ));
     }
     for skill in &mut skills {
-        skill.path = Path::new(&skill.path)
-            .strip_prefix(&path)
-            .map_err(|e| e.to_string())?
-            .to_string_lossy()
-            .into_owned();
+        skill.path = relative_path_text(
+            Path::new(&skill.path)
+                .strip_prefix(&path)
+                .map_err(|e| e.to_string())?,
+        );
     }
     Ok(Inspection {
         session_id: None,

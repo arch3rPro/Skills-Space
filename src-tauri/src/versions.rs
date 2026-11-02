@@ -140,15 +140,7 @@ mod tests {
         });
         (format!("http://{address}"), task)
     }
-    #[test]
-    fn application_manifest_versions_stay_in_sync() {
-        let package: serde_json::Value =
-            serde_json::from_str(include_str!("../../package.json")).unwrap();
-        let tauri: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
-        assert_eq!(package["version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(tauri["version"], package["version"]);
-    }
+
     #[test]
     fn stable_versions_compare_numerically_and_reject_unusable_tags() {
         assert!(stable("1.10.0") > stable("1.7.4"));

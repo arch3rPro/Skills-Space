@@ -317,6 +317,10 @@ pub struct InvocationBatch {
     dependencies: Vec<Dependency>,
     mode: String,
 }
+#[cfg(test)]
+pub(super) fn change_batch_for_test(engine: &Engine, request: InvocationBatch) -> Result<Snapshot, String> {
+    change_batch(engine, request)
+}
 fn change_batch(engine: &Engine, request: InvocationBatch) -> Result<Snapshot, String> {
     if !matches!(request.mode.as_str(), "auto" | "manual")
         || request.files.is_empty()

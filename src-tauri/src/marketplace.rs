@@ -459,31 +459,7 @@ mod tests {
         )
         .is_err());
     }
-    #[test]
-    fn display_pages_cross_upstream_boundaries_without_drops_or_duplicates() {
-        let mut requested = Vec::new();
-        let time = now();
-        let page = page_from_chunks(17, 12, |index| {
-            requested.push(index);
-            Ok(cached(index * 200, 200, 405, true, time))
-        })
-        .unwrap();
-        assert_eq!(requested, [0, 1]);
-        assert_eq!(
-            page.skills
-                .iter()
-                .map(|s| s.skill_id.as_str())
-                .collect::<Vec<_>>(),
-            (192..204).map(|n| format!("skill-{n}")).collect::<Vec<_>>()
-        );
-        assert_eq!(page.page, 17);
-        assert_eq!(page.total_pages, 34);
-        assert!(!page.stale);
-        let first = page_from_chunks(0, 12, |_| Ok(cached(0, 200, 405, true, time))).unwrap();
-        assert_eq!(first.page, 1);
-        assert_eq!(first.skills[0].skill_id, "skill-0");
-        assert!(page_from_chunks(usize::MAX, 12, |_| unreachable!()).is_err());
-    }
+
     #[test]
     fn supported_page_sizes_keep_order_across_200_item_chunks_and_bound_terminal_pages() {
         let at=now();
@@ -491,7 +467,7 @@ mod tests {
             let total:usize=405;let mut all=Vec::new();
             for page in 1..=total.div_ceil(size) {
                 let result=page_from_chunks(page,size,|index| {let start=index*200;let count=(total-start).min(200);Ok(cached(start,count,total,start+count<total,at))}).unwrap();
-                assert_eq!(result.total,total);assert_eq!(result.total_pages,total.div_ceil(size));assert_eq!(result.page,page);assert!(result.skills.len()<=size);
+                assert_eq!(result.total,total);assert_eq!(result.total_pages,total.div_ceil(size));assert_eq!(result.page,page);assert!(result.skills.len()<=size);assert!(!result.stale);
                 all.extend(result.skills.into_iter().map(|skill|skill.skill_id));
             }
             assert_eq!(all,(0..total).map(|n|format!("skill-{n}")).collect::<Vec<_>>());
@@ -499,7 +475,10 @@ mod tests {
             let result=page_from_chunks(crossing,size,|index|{requested.push(index);Ok(cached(index*200,200,total,true,at))}).unwrap();
             assert_eq!(requested,vec![0,1]);assert_eq!(result.skills.len(),size);assert_eq!(result.skills[0].skill_id,format!("skill-{}",(crossing-1)*size));
             let empty=page_from_chunks(99,size,|_|Ok(cached(0,0,0,false,at))).unwrap();assert_eq!(empty.page,1);assert_eq!(empty.total_pages,1);assert!(empty.skills.is_empty());
-            let shrunk=page_from_chunks(99,size,|index|Ok(if index==0{cached(0,25,25,false,at)}else{cached(index*200,0,25,false,at)})).unwrap();assert_eq!(shrunk.page,25usize.div_ceil(size));assert_eq!(shrunk.skills.last().unwrap().skill_id,"skill-24");
+            let first=page_from_chunks(0,size,|_|Ok(cached(0,200,405,true,at))).unwrap();assert_eq!(first.page,1);assert_eq!(first.skills[0].skill_id,"skill-0");
+            let mut requested=Vec::new();
+            let shrunk=page_from_chunks(99,size,|index|{requested.push(index);Ok(if index==0{cached(0,25,25,false,at)}else{cached(index*200,0,25,false,at)})}).unwrap();assert_eq!(shrunk.page,25usize.div_ceil(size));assert_eq!(shrunk.total_pages,25usize.div_ceil(size));assert_eq!(shrunk.skills.len(),25-(shrunk.page-1)*size);assert_eq!(shrunk.skills.last().unwrap().skill_id,"skill-24");
+            assert_eq!(requested,vec![((99-1)*size)/CHUNK_SIZE,0]);
         }
         for size in [0,1,13,23,25,49,100,usize::MAX] {assert!(page_from_chunks(1,size,|_|unreachable!("invalid size must not fetch")).is_err());}
         for size in [12,24,48] {assert!(page_from_chunks(usize::MAX,size,|_|unreachable!("invalid offset must not fetch")).is_err());}
@@ -538,29 +517,7 @@ mod tests {
         .unwrap_err()
         .contains("second chunk failed"));
     }
-    #[test]
-    fn shortened_boards_clamp_old_page_and_reload_the_actual_terminal_chunk() {
-        let at = now();
-        let mut requested = Vec::new();
-        let page = page_from_chunks(99, 12, |index| {
-            requested.push(index);
-            Ok(if index == 0 {
-                cached(0, 25, 25, false, at)
-            } else {
-                cached(index * CHUNK_SIZE, 0, 25, false, at)
-            })
-        })
-        .unwrap();
-        assert_eq!(requested, [5, 0]);
-        assert_eq!(page.page, 3);
-        assert_eq!(page.total_pages, 3);
-        assert_eq!(page.skills.len(), 1);
-        assert_eq!(page.skills[0].skill_id, "skill-24");
-        let empty = page_from_chunks(99, 12, |_| Ok(cached(0, 0, 0, false, at))).unwrap();
-        assert_eq!(empty.page, 1);
-        assert_eq!(empty.total_pages, 1);
-        assert!(empty.skills.is_empty());
-    }
+
     #[test]
     fn search_distinguishes_empty_invalid_owner_mismatch_and_preserves_relevance() {
         assert!(parse_search("{\"skills\":[]}", "").unwrap().is_empty());

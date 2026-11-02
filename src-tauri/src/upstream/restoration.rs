@@ -789,10 +789,10 @@ fn restore(engine: &Engine, confirmed: &RestorePlan) -> Result<RestoreResult, St
         warnings
             .push("Inventory refresh failed. Inspect actual directories before retrying.".into());
     }
-    let target_paths: BTreeSet<_> = confirmed.items.iter().map(|i| i.path.as_str()).collect();
-    let mut affected_paths: BTreeSet<String> = target_paths.iter().map(|p| (*p).into()).collect();
+    let target_paths: BTreeSet<PathBuf> = confirmed.items.iter().map(|i| PathBuf::from(&i.path)).collect();
+    let mut affected_paths = target_paths.clone();
     for path in &confirmed.observed {
-        if target_paths.contains(path.path.as_str()) {
+        if target_paths.contains(Path::new(&path.path)) {
             continue;
         }
         let after = observe(engine, Path::new(&path.path));
@@ -801,9 +801,9 @@ fn restore(engine: &Engine, confirmed: &RestorePlan) -> Result<RestoreResult, St
             && path.link_target == after.link_target
             && dunce::canonicalize(&path.path)
                 .ok()
-                .is_some_and(|p| target_paths.contains(p.to_string_lossy().as_ref()));
+                .is_some_and(|p| target_paths.contains(p.as_path()));
         if shared_link {
-            affected_paths.insert(path.path.clone());
+            affected_paths.insert(PathBuf::from(&path.path));
         } else if path.hash.is_none() || after != *path {
             warnings.push(format!(
                 "Other installation changed or could not be confirmed: {}",
@@ -813,8 +813,8 @@ fn restore(engine: &Engine, confirmed: &RestorePlan) -> Result<RestoreResult, St
     }
     if let Some(after) = &inventory {
         for skill in &after.skills {
-            if !confirmed.observed.iter().any(|p| p.path == skill.path)
-                && !affected_paths.contains(&skill.path)
+            if !confirmed.observed.iter().any(|p| Path::new(&p.path) == Path::new(&skill.path))
+                && !affected_paths.contains(Path::new(&skill.path))
             {
                 warnings.push(format!(
                     "Additional installation observed outside the plan: {}",
@@ -1435,51 +1435,19 @@ mod tests {
                 .after_kind,
             "missing"
         );
-    }
-    #[cfg(unix)]
-    #[test]
-    fn zero_exit_without_restore_does_not_report_success() {
-        use std::os::unix::fs::PermissionsExt;
-        let fixture = TemporaryDirectory::new().unwrap();
-        let home = fixture.0.join("home");
-        let project = fixture.0.join("project");
-        fs::create_dir_all(&home).unwrap();
-        fs::create_dir_all(&project).unwrap();
-        let mut engine = engine(&home);
-        let t = target(&project);
-        source(&project.join("node_modules/pkg"), "locked", "one");
-        engine
-            .cli(
-                &[
-                    "experimental_sync".into(),
-                    "--copy".into(),
-                    "--no-cleanup".into(),
-                    "--no-remote".into(),
-                    "--yes".into(),
-                    "--agent".into(),
-                    "codex".into(),
-                ],
-                &t,
-            )
-            .unwrap();
-        fs::remove_dir_all(project.join(".agents/skills/locked")).unwrap();
-        let script = fixture.0.join("noop-node");
-        let real = engine.node.to_string_lossy().replace('\'', "'\\''");
-        fs::write(&script,format!("#!/bin/sh\nif [ \"$2\" = experimental_install ]; then exit 0; fi\nexec '{real}' \"$@\"\n")).unwrap();
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-        engine.node = script;
-        let plan = prepare(&engine, &t).unwrap().plan;
-        let result = restore(&engine, &plan).unwrap();
-        assert_eq!(result.items[0].status, "failed");
-        assert!(!result.items[0].content_matches);
-        assert_eq!(result.items[0].content_state, "missing");
-        assert_eq!(result.items[0].lock_state, "matching");
+        let failed = result.items.iter().find(|i| i.skill == "second").unwrap();
+        assert!(!failed.content_matches);
+        assert_eq!(failed.content_state, "missing");
+        assert_eq!(failed.lock_state, "matching");
+        let first = fs::read(project.join(".agents/skills/first/SKILL.md")).unwrap();
         engine.node = crate::upstream::tests::engine(&home).node;
-        let reviewed = prepare(&engine, &t).unwrap().plan;
-        let retried = restore(&engine, &reviewed).unwrap();
-        assert_eq!(retried.items[0].status, "complete");
-        assert_eq!(retried.items[0].content_state, "matching");
+        let current = prepare(&engine, &t).unwrap().plan;
+        let retried = restore(&engine, &current).unwrap();
+        assert!(retried.items.iter().all(|i| i.status == "complete" && i.content_state == "matching"));
+        assert_eq!(fs::read(project.join(".agents/skills/first/SKILL.md")).unwrap(), first);
+
     }
+
     #[cfg(unix)]
     #[test]
     fn unreadable_restored_content_and_lock_recover_after_permissions_are_fixed() {

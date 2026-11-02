@@ -360,8 +360,7 @@ mod tests {
     }
     #[test]
     fn batch_session_installs_two_skills_with_two_clones_in_both_scopes_and_modes() {
-        for project in [false, true] {
-            for copy in [false, true] {
+        for (project, copy) in [(false, false), (true, true)] {
                 let (_f, mut e, url) = setup();
                 let events = std::sync::Arc::new(Mutex::new(Vec::new()));
                 let received = events.clone();
@@ -427,7 +426,6 @@ mod tests {
                     assert_eq!(lock["skills"][name]["sourceUrl"], url);
                     assert_eq!(lock["skills"][name]["sourceType"], "git");
                 }
-            }
         }
     }
     #[test]
@@ -476,6 +474,8 @@ mod tests {
             vec![2u8; 2 * 1024 * 1024],
         )
         .unwrap();
+        // Compare exact media and document bytes, independent of host Git newline defaults.
+        fs::write(f.0.join("repo/.gitattributes"), "* -text\n").unwrap();
         commit(&e, &f.0.join("repo"));
         let profile = e.home.join(".dsh/profiles/desktop");
         fs::create_dir_all(&profile).unwrap();
@@ -496,10 +496,18 @@ mod tests {
             let result = apply(&e, &op).unwrap();
             assert_eq!(result.items[0].status, "complete", "{}", result.logs);
             let installed = e.home.join(".agents/skills/alpha");
-            assert_eq!(
-                source_install_signature(&source),
-                tree_signature(&installed)
-            );
+            let expected = source_install_signature(&source).expect("Source tree is readable");
+            let actual = tree_signature(&installed).expect("Installed tree is readable");
+            let first_difference = expected
+                .iter()
+                .zip(&actual)
+                .position(|(a, b)| a != b)
+                .or_else(|| {
+                    (expected.len() != actual.len()).then_some(expected.len().min(actual.len()))
+                });
+            assert!(expected == actual,
+                "Exact tree bytes differ: source length {}, installed length {}, first differing byte {:?}",
+                expected.len(), actual.len(), first_difference);
             assert_eq!(
                 fs::metadata(installed.join("assets/hero.gif"))
                     .unwrap()

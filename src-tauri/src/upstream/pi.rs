@@ -1281,15 +1281,15 @@ mod tests {
             .collect();
         let e = engine(&home);
         let config = home.join(".pi/agent/settings.json");
-        write_settings(&config, &serde_json::json!({"future":true,"packages":[{"source":"./local-package","skills":[],"extensions":["extension.ts"]}]})).unwrap();
+        write_settings(&config, &serde_json::json!({"future":true,"packages":[{"source":"./local-package","skills":[],"extensions":["extension.ts"],"future":true}]})).unwrap();
         let before = inspect(&e, &global()).unwrap();
         let files: Vec<_> = before
             .skills
             .iter()
-            .filter(|item| item.name != "package-gamma")
+            .filter(|item| item.name == "package-alpha" || item.name == "native")
             .map(|item| item.file.clone())
             .collect();
-        assert_eq!(files.len(), 3);
+        assert_eq!(files.len(), 2);
         let bytes = fs::read(&config).unwrap();
         let mut invalid = files.clone();
         invalid.push(home.join("missing/SKILL.md").to_string_lossy().into_owned());
@@ -1317,7 +1317,7 @@ mod tests {
         assert!(enabled
             .skills
             .iter()
-            .all(|item| item.enabled == (item.name != "package-gamma")));
+            .all(|item| item.enabled == (item.name == "package-alpha" || item.name == "native")));
         let bytes = fs::read(&config).unwrap();
         assert!(toggle_batch(
             &e,
@@ -1343,6 +1343,7 @@ mod tests {
         assert!(disabled.skills.iter().all(|item| !item.enabled));
         let saved = settings(&config).unwrap();
         assert_eq!(saved["future"], true);
+        assert_eq!(saved["packages"][0]["future"], true);
         assert_eq!(
             saved["packages"][0]["extensions"],
             serde_json::json!(["extension.ts"])
@@ -1351,42 +1352,7 @@ mod tests {
             assert_eq!(fs::read(file).unwrap(), originals[index]);
         }
     }
-    #[test]
-    fn enabling_one_explicitly_disabled_package_skill_does_not_enable_the_package() {
-        let root = TemporaryDirectory::new().unwrap();
-        let home = root.0.join("home");
-        let package = home.join(".pi/agent/local-package");
-        skill(&package.join("skills"), "package-alpha");
-        skill(&package.join("skills"), "package-beta");
-        let e = engine(&home);
-        let config = home.join(".pi/agent/settings.json");
-        write_settings(&config,&serde_json::json!({"packages":[{"source":"./local-package","skills":[],"extensions":["extension.ts"],"future":true}]})).unwrap();
-        let before = inspect(&e, &global()).unwrap();
-        assert!(before.skills.iter().all(|s| !s.enabled));
-        let after = flip(&e, before, "package-alpha", true).unwrap();
-        assert!(
-            after
-                .skills
-                .iter()
-                .find(|s| s.name == "package-alpha")
-                .unwrap()
-                .enabled
-        );
-        assert!(
-            !after
-                .skills
-                .iter()
-                .find(|s| s.name == "package-beta")
-                .unwrap()
-                .enabled
-        );
-        let data = settings(&config).unwrap();
-        assert_eq!(
-            data["packages"][0]["extensions"],
-            serde_json::json!(["extension.ts"])
-        );
-        assert_eq!(data["packages"][0]["future"], true);
-    }
+
     #[test]
     fn ignore_files_cycles_aliases_and_name_precedence_match_pi_resource_rules() {
         let root = TemporaryDirectory::new().unwrap();

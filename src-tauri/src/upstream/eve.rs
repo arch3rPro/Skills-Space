@@ -656,15 +656,18 @@ mod tests {
             fs::read(project.join("agent/subagents/alpha/skills/fixture-skill/SKILL.md")).unwrap(),
             original
         );
+        let expected = project
+            .join("agent")
+            .join("subagents")
+            .join("alpha")
+            .join("skills")
+            .join("fixture-skill");
         assert!(result
             .inventory
             .unwrap()
             .skills
             .iter()
-            .find(|s| s.path.contains("/alpha/"))
-            .unwrap()
-            .path
-            .contains("/alpha/"));
+            .any(|s| Path::new(&s.path) == expected));
         op.eve_subagents = vec!["missing".into()];
         assert!(apply(&e, &op).is_err());
         op.eve_subagents = vec!["../outside".into()];

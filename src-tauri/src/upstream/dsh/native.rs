@@ -23,20 +23,6 @@ pub struct ConfigurationChange {
     #[serde(default)]
     confirm_materialize: bool,
 }
-#[cfg(test)]
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct InvocationChange {
-    target: Target,
-    file: String,
-    revision: String,
-    #[serde(default)]
-    context_key: Option<String>,
-    #[serde(default)]
-    configuration_revision: Option<String>,
-    model_invocable: bool,
-    user_invocable: bool,
-}
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeRemoval {
@@ -256,61 +242,6 @@ fn native_skill(
     Ok((snapshot.clone(), item.clone()))
 }
 #[cfg(test)]
-fn invocation_save(engine: &Engine, change: InvocationChange) -> Result<serde_json::Value, String> {
-    let (before, item) = native_skill(
-        engine,
-        &change.target,
-        &change.file,
-        true,
-        change.context_key.as_deref(),
-    )?;
-    if change
-        .configuration_revision
-        .as_ref()
-        .is_some_and(|revision| before["revision"] != *revision)
-    {
-        return Err("DSH configuration context changed. Reload before saving.".into());
-    }
-    let root = item["physicalRoot"].as_str().ok_or("Invalid DSH root.")?;
-    let key = format!("{:x}", Sha256::digest(change.file.as_bytes()));
-    let _lock =
-        WriterLock::acquire(&Path::new(root).join(format!(".skills-space-dsh-{}", &key[..24])))?;
-    if item["documentRevision"] != change.revision {
-        return Err("DSH skill changed. Refresh before saving invocation.".into());
-    }
-    let prepared = prepare(
-        engine,
-        &change.target,
-        "invocation",
-        serde_json::json!({"file":change.file,"modelInvocable":change.model_invocable,"userInvocable":change.user_invocable}),
-    )?;
-    let (current, current_item) = native_skill(
-        engine,
-        &change.target,
-        &change.file,
-        true,
-        change.context_key.as_deref(),
-    )?;
-    if current["revision"] != before["revision"]
-        || current_item["documentRevision"] != change.revision
-        || fs::read_to_string(&change.file).map_err(|e| e.to_string())? != prepared.before
-    {
-        return Err("DSH skill changed during preparation. Refresh before saving.".into());
-    }
-    pi::write_bytes(Path::new(&change.file), prepared.after.as_bytes())?;
-    let after = inspect_context(engine, &change.target, change.context_key.as_deref())?;
-    if !after["skills"].as_array().is_some_and(|rows| {
-        rows.iter().any(|row| {
-            row["file"] == change.file
-                && row["modelInvocable"] == change.model_invocable
-                && row["userInvocable"] == change.user_invocable
-        })
-    }) {
-        return Err("DSH invocation saved; refresh to verify the file.".into());
-    }
-    Ok(after)
-}
-#[cfg(test)]
 fn removal_plan(engine: &Engine, target: Target, file: String) -> Result<NativeRemoval, String> {
     removal_plan_context(engine, target, file, None)
 }
@@ -443,7 +374,7 @@ fn creation_review(
         .as_array()
         .and_then(|roots| {
             roots.iter().find(|root| {
-                root["path"] == directory
+                root["path"].as_str().is_some_and(|path| Path::new(path) == Path::new(&directory))
                     && root["inScope"] == true
                     && root["canCreate"] == true
                     && matches!(
@@ -900,7 +831,7 @@ mod tests {
     }
     #[test]
     #[ignore = "requires SKILLS_SPACE_DSH_TEST_INSTALL pointing to an original DSH package"]
-    fn secondary_provider_invocation_uses_full_preset_discovery_without_touching_primary() {
+    fn secondary_provider_discovery_preserves_primary_and_profile() {
         let temp = TemporaryDirectory::new().unwrap();
         let home = temp.0.join("home");
         let e = engine(&home);
@@ -916,84 +847,18 @@ mod tests {
         let selected = before["configurations"].as_array().unwrap().iter().find(|row| row["key"] == key).unwrap();
         assert_eq!(selected["entryId"], "primary");
         let row = before["skills"].as_array().unwrap().iter().find(|row| row["file"] == secondary.to_string_lossy().as_ref()).unwrap();
-        assert_eq!(row["canSetInvocation"], true);
-        let after = invocation_save(&e, InvocationChange {
-            target: global(), file: secondary.to_string_lossy().into_owned(),
-            revision: row["documentRevision"].as_str().unwrap().into(),
-            context_key: Some(key.into()), configuration_revision: Some(before["revision"].as_str().unwrap().into()),
-            model_invocable: false, user_invocable: true,
-        }).unwrap();
-        let changed = after["skills"].as_array().unwrap().iter().find(|row| row["file"] == secondary.to_string_lossy().as_ref()).unwrap();
-        assert_eq!(changed["modelInvocable"], false);
-        assert_eq!(changed["userInvocable"], true);
+        assert_eq!(row["modelInvocable"], true);
+        assert_eq!(row["userInvocable"], true);
+        let secondary_before = fs::read(&secondary).unwrap();
+        let after = inspect_context(&e, &global(), Some(key)).unwrap();
+        assert!(after["skills"].as_array().unwrap().iter().any(|row| row["file"] == secondary.to_string_lossy().as_ref()));
+        assert_eq!(fs::read(&secondary).unwrap(), secondary_before);
         assert_eq!(after["contextKey"], key);
         assert_eq!(fs::read(&primary).unwrap(), primary_before);
         assert_eq!(fs::read_to_string(&patch).unwrap(), body);
         assert!(fs::read_to_string(&secondary).unwrap().ends_with("---\r\nBody\r\n"));
     }
-    #[test]
-    fn invocation_four_policies_preserve_body_and_reject_stale_and_shared_files() {
-        let temp = TemporaryDirectory::new().unwrap();
-        let home = temp.0.join("home");
-        let e = engine(&home);
-        let file = skill(&home, ".dsh/skills/alpha/SKILL.md", "alpha");
-        let sibling = skill(&home, ".agents/skills/alpha/SKILL.md", "alpha");
-        let shared_before = fs::read(&sibling).unwrap();
-        for model in [true, false] {
-            for user in [true, false] {
-                let snapshot = inspect(&e, &global()).unwrap();
-                let row = snapshot["skills"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|row| row["file"] == file.to_string_lossy().as_ref())
-                    .unwrap();
-                let request = InvocationChange {
-                    context_key: None,
-                    configuration_revision: None,
-                    target: global(),
-                    file: file.to_string_lossy().into_owned(),
-                    revision: row["documentRevision"].as_str().unwrap().into(),
-                    model_invocable: model,
-                    user_invocable: user,
-                };
-                let after = invocation_save(&e, request).unwrap();
-                let own = after["skills"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|row| row["file"] == file.to_string_lossy().as_ref())
-                    .unwrap();
-                assert_eq!(own["modelInvocable"], model);
-                assert_eq!(own["userInvocable"], user);
-                let raw = fs::read_to_string(&file).unwrap();
-                assert!(raw.ends_with("---\r\nBody\r\n") && raw.contains("# retain"));
-            }
-        }
-        assert!(invocation_save(
-            &e,
-            InvocationChange {
-                context_key: None,
-                configuration_revision: None,
-                target: global(),
-                file: file.to_string_lossy().into_owned(),
-                revision: "stale".into(),
-                model_invocable: true,
-                user_invocable: true
-            }
-        )
-        .is_err());
-        assert!(native_skill(&e, &global(), &sibling.to_string_lossy(), true, None).is_err());
-        assert_eq!(fs::read(sibling).unwrap(), shared_before);
-        let reopened = inspect(&engine(&home), &global()).unwrap();
-        assert!(reopened["skills"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|row| row["source"] == "user-dsh"
-                && row["modelInvocable"] == false
-                && row["userInvocable"] == false));
-    }
+
     #[test]
     #[ignore = "requires SKILLS_SPACE_DSH_TEST_INSTALL to inspect the active Profile before Trash"]
     fn trash_moves_only_reviewed_bundle_or_flat_file_and_failure_never_deletes() {
@@ -1050,7 +915,7 @@ mod tests {
             assert!(removal_plan(&e, global(), file.to_string_lossy().into_owned()).is_err());
             fs::remove_file(&nested).unwrap();
             fs::hard_link(&outside, &nested).unwrap();
-            assert!(native_skill(&e, &global(), &file.to_string_lossy(), true, None).is_err());
+            assert!(removal_plan(&e, global(), file.to_string_lossy().into_owned()).is_err());
             fs::remove_file(nested).unwrap();
         }
         let project = temp.0.join("project");
