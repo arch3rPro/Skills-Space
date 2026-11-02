@@ -117,13 +117,13 @@ fn plan(engine: &Engine, target: Target, file: String) -> Result<Plan, String> {
     if fs::symlink_metadata(&root)
         .map_err(|e| e.to_string())?
         .is_symlink()
-        || fs::canonicalize(&root).map_err(|e| e.to_string())? != root
+        || dunce::canonicalize(&root).map_err(|e| e.to_string())? != root
     {
         return Err("Pi removal refuses shared or linked files.".into());
     }
     let inventory = engine.inventory(&target)?;
     if inventory.skills.iter().any(|item| {
-        fs::canonicalize(&item.path).ok().as_ref() == Some(&root)
+        dunce::canonicalize(&item.path).ok().as_ref() == Some(&root)
             && (item.shared || item.cli_managed || item.agents.iter().any(|id| id != "pi"))
     }) {
         return Err("Pi removal only supports independent local skills.".into());
@@ -206,7 +206,7 @@ mod tests {
             format!("---\nname: {name}\ndescription: Fixture\n---\nBody"),
         )
         .unwrap();
-        fs::canonicalize(file).unwrap()
+        dunce::canonicalize(file).unwrap()
     }
     #[test]
     fn private_skill_moves_only_reviewed_directory_and_preserves_settings_and_siblings() {
@@ -318,7 +318,7 @@ mod tests {
         fs::create_dir_all(home.join(".pi/agent")).unwrap();
         fs::write(
             home.join(".pi/agent/trust.json"),
-            serde_json::to_vec(&serde_json::json!({fs::canonicalize(&project).unwrap().to_string_lossy().to_string():true}))
+            serde_json::to_vec(&serde_json::json!({dunce::canonicalize(&project).unwrap().to_string_lossy().to_string():true}))
                 .unwrap(),
         )
         .unwrap();
@@ -342,14 +342,14 @@ mod tests {
             plan(
                 &e,
                 global(),
-                fs::canonicalize(&extra)
+                dunce::canonicalize(&extra)
                     .unwrap()
                     .to_string_lossy()
                     .into_owned()
             )
             .unwrap()
             .path,
-            fs::canonicalize(&extra).unwrap().to_string_lossy()
+            dunce::canonicalize(&extra).unwrap().to_string_lossy()
         );
     }
 }

@@ -132,7 +132,7 @@ pub(super) fn link_destination(path: &Path) -> Option<PathBuf> {
     let absolute = if target.is_absolute() {
         target
     } else {
-        fs::canonicalize(path.parent()?).ok()?.join(target)
+        dunce::canonicalize(path.parent()?).ok()?.join(target)
     };
     let mut normalized = PathBuf::new();
     for part in absolute.components() {
@@ -144,7 +144,8 @@ pub(super) fn link_destination(path: &Path) -> Option<PathBuf> {
             part => normalized.push(part.as_os_str()),
         }
     }
-    Some(normalized)
+    // Windows read_link may return a verbatim absolute target; records use CLI paths.
+    Some(dunce::simplified(&normalized).to_path_buf())
 }
 pub(super) fn observe(engine: &Engine, path: &Path) -> RestorePath {
     let mut out = RestorePath {
@@ -535,7 +536,7 @@ fn prepare_cached(
         if before.kind != "missing" && before.hash.is_none() {
             issue=Some("Existing target cannot be fully inspected. Review its actual directory before restoring.".into());
         }
-        let resolved = fs::canonicalize(&path).ok();
+        let resolved = dunce::canonicalize(&path).ok();
         let mut affected: BTreeSet<String> = agents.iter().cloned().collect();
         for record in &inventory.skills {
             if resolved
@@ -798,7 +799,7 @@ fn restore(engine: &Engine, confirmed: &RestorePlan) -> Result<RestoreResult, St
         let shared_link = path.kind == "link"
             && after.kind == "link"
             && path.link_target == after.link_target
-            && fs::canonicalize(&path.path)
+            && dunce::canonicalize(&path.path)
                 .ok()
                 .is_some_and(|p| target_paths.contains(p.to_string_lossy().as_ref()));
         if shared_link {

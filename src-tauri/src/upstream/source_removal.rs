@@ -114,7 +114,7 @@ mod tests {
                 fs::write(
                     agent.join("trust.json"),
                     serde_json::to_vec(&serde_json::json!({
-                        fs::canonicalize(&project).unwrap().to_string_lossy().to_string(): true
+                        dunce::canonicalize(&project).unwrap().to_string_lossy().to_string(): true
                     }))
                     .unwrap(),
                 )

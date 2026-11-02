@@ -788,6 +788,34 @@ mod tests {
             .join("skills-lock.json")
             .exists());
     }
+    #[cfg(windows)]
+    #[test]
+    fn unsupported_temporary_use_refuses_without_writing_sessions_or_skills() {
+        let (_f, e, source, cache, project) = fixture();
+        let document = fs::read(source.join("SKILL.md")).unwrap();
+        let support = fs::read(source.join("supporting.bin")).unwrap();
+        for (mode, agent) in [("prompt", None), ("agent", Some("codex"))] {
+            let request = UseInput {
+                target: project.clone(),
+                source: source.to_string_lossy().into_owned(),
+                skill: "fixture-skill".into(),
+                source_fingerprint: "not-inspected-on-unsupported-platform".into(),
+                include_internal: false,
+                mode: mode.into(),
+                agent: agent.map(str::to_owned),
+            };
+            assert_eq!(
+                prepare(&e, &cache, request).err().unwrap(),
+                "Temporary-use process control is unavailable on this platform."
+            );
+            assert!(!cache.exists());
+            assert_eq!(fs::read(source.join("SKILL.md")).unwrap(), document);
+            assert_eq!(fs::read(source.join("supporting.bin")).unwrap(), support);
+            assert!(!e.home.join(".codex/skills").exists());
+            untouched(&e, &project);
+        }
+    }
+    #[cfg(unix)]
     #[test]
     fn original_use_prompt_retains_support_files_until_release_and_never_installs() {
         let (_f, e, source, cache, project) = fixture();
@@ -830,6 +858,7 @@ mod tests {
             assert!(session(&cache, &plan.id, true).is_err());
         }
     }
+    #[cfg(unix)]
     #[test]
     fn changed_node_modules_source_invalid_agents_and_foreign_cleanup_are_blocked() {
         let (_f, e, source, cache, project) = fixture();
@@ -1029,6 +1058,7 @@ mod tests {
         release(&cache, &plan.id).unwrap();
         untouched(&e, &project);
     }
+    #[cfg(unix)]
     #[test]
     fn original_provider_use_keeps_map_files_and_zero_exit_without_preparation_fails() {
         let (f, mut e, _source, cache, project) = fixture();
@@ -1066,6 +1096,7 @@ mod tests {
         untouched(&e, &project);
     }
 
+    #[cfg(unix)]
     #[test]
     fn original_direct_download_use_preserves_support_and_never_creates_locks() {
         use crate::upstream::provider::tests::{archive, Server};
@@ -1095,6 +1126,7 @@ mod tests {
         release(&cache, &plan.id).unwrap();
         untouched(&e, &project);
     }
+    #[cfg(unix)]
     #[test]
     fn original_git_use_accepts_openclaw_without_retired_flag_and_cleans_clone() {
         let (_f, e, source, cache, project) = fixture();
@@ -1122,7 +1154,14 @@ mod tests {
                     .success
             );
         }
-        fs::write(e.home.join(".gitconfig"),format!("[url \"file://{}\"]\n    insteadOf = https://github.com/openclaw/use-fixture.git\n",source.display())).unwrap();
+        fs::write(
+            e.home.join(".gitconfig"),
+            format!(
+                "[url \"{}\"]\n    insteadOf = https://github.com/openclaw/use-fixture.git\n",
+                crate::upstream::tests::file_url(&source)
+            ),
+        )
+        .unwrap();
         let input = input(
             &e,
             "openclaw/use-fixture@fixture-skill",

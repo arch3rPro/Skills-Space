@@ -59,7 +59,7 @@ fn location_inner(
         );
         ancestor = ancestor.parent().ok_or("Invalid creation directory")?;
     }
-    let mut parent = fs::canonicalize(ancestor).map_err(|e| e.to_string())?;
+    let mut parent = dunce::canonicalize(ancestor).map_err(|e| e.to_string())?;
     for component in missing.into_iter().rev() {
         parent.push(component);
     }

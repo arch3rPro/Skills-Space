@@ -1,12 +1,19 @@
 use super::super::super::tests::{engine, global};
 use super::*;
+fn migration_root(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("skills-space-codex-update-{name}"))
+}
 fn recovery(rules: Vec<Value>) -> Recovery {
     Recovery {
         enabled: false,
-        old_root: "/old".into(),
-        path_rules: capture_paths(&rules, Path::new("/old")),
+        old_root: migration_root("old").to_string_lossy().into_owned(),
+        path_rules: capture_paths(&rules, &migration_root("old")),
         rules,
-        documents: vec!["skills/a/SKILL.md".into()],
+        documents: vec![Path::new("skills")
+            .join("a")
+            .join("SKILL.md")
+            .to_string_lossy()
+            .into_owned()],
         candidate_fingerprint: "hash".into(),
         candidate_version: Some("2".into()),
         package_fingerprint: None,
@@ -15,51 +22,51 @@ fn recovery(rules: Vec<Value>) -> Recovery {
 }
 #[test]
 fn migration_preserves_names_extensions_order_and_unrelated_edits() {
-    let rule = json!({"path":"/old/skills/a/SKILL.md","enabled":false,"custom":"keep"});
+    let rule = json!({"path":migration_root("old").join("skills").join("a").join("SKILL.md"),"enabled":false,"custom":"keep"});
     let old = recovery(vec![rule.clone()]);
     let current = vec![
         json!({"name":"same-name","enabled":false}),
         rule,
         json!({"name":"concurrent","enabled":true}),
     ];
-    let migrated = migrate_rules(&current, &old, Path::new("/new"), &old.documents).unwrap();
+    let migrated = migrate_rules(&current, &old, &migration_root("new"), &old.documents).unwrap();
     assert_eq!(migrated[0], current[0]);
     assert_eq!(migrated[2], current[2]);
     assert_eq!(
         migrated[1],
-        json!({"path":"/new/skills/a/SKILL.md","enabled":false,"custom":"keep"})
+        json!({"path":migration_root("new").join("skills").join("a").join("SKILL.md"),"enabled":false,"custom":"keep"})
     );
     assert_eq!(
-        migrate_rules(&migrated, &old, Path::new("/new"), &old.documents).unwrap(),
+        migrate_rules(&migrated, &old, &migration_root("new"), &old.documents).unwrap(),
         migrated
     );
 }
 #[test]
 fn migration_rejects_removed_ambiguous_and_concurrently_edited_selectors() {
-    let rule = json!({"path":"/old/skills/a/SKILL.md","enabled":false});
+    let rule = json!({"path":migration_root("old").join("skills").join("a").join("SKILL.md"),"enabled":false});
     let old = recovery(vec![rule.clone()]);
-    assert!(migrate_rules(&[rule.clone()], &old, Path::new("/new"), &[]).is_err());
+    assert!(migrate_rules(&[rule.clone()], &old, &migration_root("new"), &[]).is_err());
     assert!(migrate_rules(
         &[rule.clone(), rule.clone()],
         &old,
-        Path::new("/new"),
+        &migration_root("new"),
         &old.documents
     )
     .is_err());
     assert!(migrate_rules(
-        &[json!({"path":"/old/skills/a/SKILL.md","enabled":true})],
+        &[json!({"path":migration_root("old").join("skills").join("a").join("SKILL.md"),"enabled":true})],
         &old,
-        Path::new("/new"),
+        &migration_root("new"),
         &old.documents
     )
     .is_err());
     assert!(migrate_rules(
         &[
             rule,
-            json!({"path":"/old/skills/b/SKILL.md","enabled":false})
+            json!({"path":migration_root("old").join("skills").join("b").join("SKILL.md"),"enabled":false})
         ],
         &old,
-        Path::new("/new"),
+        &migration_root("new"),
         &old.documents
     )
     .is_err());
@@ -322,11 +329,18 @@ fn original_cli_local_update_preserves_disabled_plugin_and_skill_rules() {
 
 #[test]
 fn approved_unmapped_rules_remain_unchanged() {
-    let rule = json!({"path":"/old/skills/a/SKILL.md","enabled":false});
+    let rule = json!({"path":migration_root("old").join("skills").join("a").join("SKILL.md"),"enabled":false});
     let mut old = recovery(vec![rule.clone()]);
-    old.unmapped_rules.push("/old/skills/a/SKILL.md".into());
+    old.unmapped_rules.push(
+        migration_root("old")
+            .join("skills")
+            .join("a")
+            .join("SKILL.md")
+            .to_string_lossy()
+            .into_owned(),
+    );
     assert_eq!(
-        migrate_rules(&[rule.clone()], &old, Path::new("/new"), &[]).unwrap(),
+        migrate_rules(&[rule.clone()], &old, &migration_root("new"), &[]).unwrap(),
         vec![rule]
     );
 }

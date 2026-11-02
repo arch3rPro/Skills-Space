@@ -1,4 +1,37 @@
 use super::*;
+pub(super) fn file_url(path: &Path) -> String {
+    reqwest::Url::from_file_path(path).unwrap().to_string()
+}
+#[test]
+fn fixture_file_urls_preserve_reserved_characters_and_native_paths() {
+    let fixture = TemporaryDirectory::new().unwrap();
+    let path = fixture.0.join("repository with # and %");
+    let value = file_url(&path);
+    assert!(!value.contains('\\'));
+    assert!(value.contains("%23"));
+    assert!(value.contains("%25"));
+    assert_eq!(
+        reqwest::Url::parse(&value).unwrap().to_file_path().unwrap(),
+        path
+    );
+}
+#[cfg(windows)]
+#[test]
+fn rust_and_node_canonical_paths_agree_for_existing_windows_directories() {
+    let fixture = TemporaryDirectory::new().unwrap();
+    let path = fixture.0.join("canonical fixture with spaces");
+    fs::create_dir(&path).unwrap();
+    let e = engine(&fixture.0);
+    let result = run_process(
+        e.command(&e.node, &fixture.0)
+            .args(["--input-type=module", "-e", "import {realpathSync, promises} from 'node:fs'; console.log(JSON.stringify([realpathSync.native(process.argv[1]), await promises.realpath(process.argv[1])]));"])
+            .arg(&path),
+    ).unwrap();
+    assert!(result.success, "{}", result.stderr);
+    let observed: Vec<String> = serde_json::from_str(result.stdout.trim()).unwrap();
+    let expected = dunce::canonicalize(&path).unwrap().to_string_lossy().into_owned();
+    assert_eq!(observed, vec![expected.clone(), expected]);
+}
 pub(super) fn declare_dependency(path: &Path) {
     let parts: Vec<_> = path.components().collect();
     let Some(index) = parts.iter().position(|p| p.as_os_str() == "node_modules") else {
@@ -385,8 +418,8 @@ fn real_internal_git_skill_checks_updates_and_removes_in_both_scopes() {
         fs::write(
             home.join(".gitconfig"),
             format!(
-                "[url \"file://{}\"]\n    insteadOf = {url}\n",
-                repo.display()
+                "[url \"{}\"]\n    insteadOf = {url}\n",
+                crate::upstream::tests::file_url(&repo)
             ),
         )
         .unwrap();
@@ -609,8 +642,8 @@ fn real_source_alias_prefix_and_filter_install_only_reviewed_skill_in_both_scope
         "https://github.com/coinbase/agentic-wallet-skills.git",
     ] {
         config.push_str(&format!(
-            "[url \"file://{}\"]\n    insteadOf = {url}\n",
-            repo.display()
+            "[url \"{}\"]\n    insteadOf = {url}\n",
+            crate::upstream::tests::file_url(&repo)
         ));
     }
     fs::write(home.join(".gitconfig"), config).unwrap();
@@ -694,8 +727,8 @@ fn source_filter_miss_hidden_ambiguity_and_extra_selection_do_not_install() {
     fs::write(
         home.join(".gitconfig"),
         format!(
-            "[url \"file://{}\"]\n    insteadOf = https://github.com/owner/repo.git\n",
-            repo.display()
+            "[url \"{}\"]\n    insteadOf = https://github.com/owner/repo.git\n",
+            crate::upstream::tests::file_url(&repo)
         ),
     )
     .unwrap();
@@ -1308,8 +1341,8 @@ fn dsh_original_cli_lifecycle_and_shared_removal_in_both_scopes() {
         fs::write(
             home.join(".gitconfig"),
             format!(
-                "[url \"file://{}\"]\n    insteadOf = {url}\n",
-                repository.display()
+                "[url \"{}\"]\n    insteadOf = {url}\n",
+                crate::upstream::tests::file_url(&repository)
             ),
         )
         .unwrap();
@@ -1479,8 +1512,8 @@ fn github_root_api_commit_and_clone_tree_versions_do_not_report_false_updates() 
     fs::write(
         home.join(".gitconfig"),
         format!(
-            "[url \"file://{}\"]\n    insteadOf = {url}\n",
-            repository.display()
+            "[url \"{}\"]\n    insteadOf = {url}\n",
+            crate::upstream::tests::file_url(&repository)
         ),
     )
     .unwrap();
@@ -1624,8 +1657,8 @@ fn real_upstream_git_lifecycle_checks_updates_and_removes_in_both_scopes() {
         fs::write(
             home.join(".gitconfig"),
             format!(
-                "[url \"file://{}\"]\n    insteadOf = {url}\n",
-                repository.display()
+                "[url \"{}\"]\n    insteadOf = {url}\n",
+                crate::upstream::tests::file_url(&repository)
             ),
         )
         .unwrap();
@@ -1972,8 +2005,8 @@ fn unavailable_source_is_retried_only_on_a_new_check() {
     fs::write(
         home.join(".gitconfig"),
         format!(
-            "[url \"file://{}\"]\n    insteadOf = {url}\n",
-            repo.display()
+            "[url \"{}\"]\n    insteadOf = {url}\n",
+            crate::upstream::tests::file_url(&repo)
         ),
     )
     .unwrap();
@@ -2032,8 +2065,8 @@ fn independent_sources_keep_update_results_ordered_and_read_only() {
         git_commit(&engine, &repo, "initial");
         let url = format!("https://skills-fixture.invalid/{name}/repo.git");
         config.push_str(&format!(
-            "[url \"file://{}\"]\n    insteadOf = {url}\n",
-            repo.display()
+            "[url \"{}\"]\n    insteadOf = {url}\n",
+            crate::upstream::tests::file_url(&repo)
         ));
         fs::write(home.join(".gitconfig"), &config).unwrap();
         let mut install = addition(Path::new(&url), global(), true);
@@ -2286,7 +2319,7 @@ fn original_discovery_priority_matches_installed_bytes_in_both_scopes() {
                 .success
             );
             git_commit(&engine, &repo, "priority fixture");
-            format!("file://{}", repo.display())
+            crate::upstream::tests::file_url(&repo)
         } else {
             repo.to_string_lossy().into_owned()
         };
@@ -2423,8 +2456,8 @@ fn confirmed_batch_updates_submit_once_including_modified_peers_in_both_scopes()
         fs::write(
             home.join(".gitconfig"),
             format!(
-                "[url \"file://{}\"]\n    insteadOf = {url}\n",
-                repo.display()
+                "[url \"{}\"]\n    insteadOf = {url}\n",
+                crate::upstream::tests::file_url(&repo)
             ),
         )
         .unwrap();
@@ -2545,8 +2578,8 @@ fn optional_content_limits_do_not_block_original_install_update_or_uninstall() {
     fs::write(
         home.join(".gitconfig"),
         format!(
-            "[url \"file://{}\"]\n insteadOf = {url}\n",
-            directory.display()
+            "[url \"{}\"]\n insteadOf = {url}\n",
+            crate::upstream::tests::file_url(&directory)
         ),
     )
     .unwrap();

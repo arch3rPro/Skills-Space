@@ -302,7 +302,10 @@ mod tests {
         let url = "https://skills-fixture.invalid/batch/repo.git".to_owned();
         fs::write(
             home.join(".gitconfig"),
-            format!("[url \"file://{}\"]\n insteadOf = {url}\n", repo.display()),
+            format!(
+                "[url \"{}\"]\n insteadOf = {url}\n",
+                crate::upstream::tests::file_url(&repo)
+            ),
         )
         .unwrap();
         (fixture, e, url)
@@ -616,8 +619,8 @@ mod tests {
             fs::write(
                 e.home.join(".gitconfig"),
                 format!(
-                    "[url \"file://{}\"]\n insteadOf = {}\n",
-                    repo.display(),
+                    "[url \"{}\"]\n insteadOf = {}\n",
+                    crate::upstream::tests::file_url(&repo),
                     parsed.url
                 ),
             )

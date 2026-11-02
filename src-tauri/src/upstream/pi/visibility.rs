@@ -234,7 +234,7 @@ mod tests {
         .unwrap();
         write_settings(
             &home.join(".pi/agent/trust.json"),
-            &serde_json::json!({fs::canonicalize(&home).unwrap().to_string_lossy().to_string():true}),
+            &serde_json::json!({dunce::canonicalize(&home).unwrap().to_string_lossy().to_string():true}),
         )
         .unwrap();
         (root, engine, skill)

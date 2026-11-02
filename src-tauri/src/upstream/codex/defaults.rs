@@ -221,7 +221,12 @@ mod tests {
 
     #[test]
     fn only_approved_default_leaves_and_types_are_accepted() {
-        let before = snapshot(&json!({"layers":[{"name":{"type":"user","file":"/fixture/config.toml"},"version":"r","config":{}}]}),true).unwrap();
+        let config = std::env::temp_dir().join("skills-space-defaults-fixture/config.toml");
+        let before = snapshot(
+            &json!({"layers":[{"name":{"type":"user","file":config},"version":"r","config":{}}]}),
+            true,
+        )
+        .unwrap();
         for (key, value) in [
             ("skills.config", json!([])),
             ("appsEnabled", json!("false")),

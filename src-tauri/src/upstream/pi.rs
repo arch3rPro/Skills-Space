@@ -762,7 +762,7 @@ mod tests {
         fs::write(
             path,
             serde_json::to_vec(
-                &serde_json::json!({fs::canonicalize(home.parent().unwrap()).unwrap().to_string_lossy().to_string():true}),
+                &serde_json::json!({dunce::canonicalize(home.parent().unwrap()).unwrap().to_string_lossy().to_string():true}),
             )
             .unwrap(),
         )
@@ -1597,7 +1597,7 @@ mod tests {
         let before = inspect(&e, &target).unwrap();
         assert!(before.skills.iter().any(|s| s.name == "local"));
         let trust = home.join(".pi/agent/trust.json");
-        write_settings(&trust, &serde_json::json!({fs::canonicalize(&project).unwrap().to_string_lossy().to_string():false})).unwrap();
+        write_settings(&trust, &serde_json::json!({dunce::canonicalize(&project).unwrap().to_string_lossy().to_string():false})).unwrap();
         let bytes = fs::read(&trust).unwrap();
         let after = inspect(&e, &target).unwrap();
         assert!(after.skills.iter().any(|s| s.name == "local" && s.in_scope));

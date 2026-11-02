@@ -52,7 +52,7 @@ pub(super) fn discover(engine: &Engine, root: &Path) -> Result<BTreeMap<String, 
         ));
     }
     let metadata: Metadata = serde_json::from_str(&output.stdout).map_err(|e| e.to_string())?;
-    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let root = dunce::canonicalize(root).map_err(|e| e.to_string())?;
     // Validate manifest paths; the original discoverSkills function alone enumerates candidates.
     for directory in metadata.paths {
         let directory = Path::new(&directory);
@@ -86,7 +86,7 @@ fn checked_path(root: &Path, path: &Path) -> Result<(), String> {
             return Err("Linked plugin paths cannot be reliably previewed.".into());
         }
     }
-    if !fs::canonicalize(path)
+    if !dunce::canonicalize(path)
         .map_err(|e| e.to_string())?
         .starts_with(root)
     {
@@ -208,7 +208,7 @@ mod tests {
         .unwrap();
         assert!(out.success);
         commit(&engine, &repo);
-        let input = format!("file://{}", repo.display());
+        let input = crate::upstream::tests::file_url(&repo);
         let mut file_op = confirmed(&engine, &input, global());
         let result = apply(&engine, &file_op).unwrap();
         assert_eq!(result.items[0].status, "complete", "{}", result.logs);
@@ -241,7 +241,7 @@ mod tests {
         assert!(out.success);
         commit(&engine, &repo);
         let url = "https://skills-fixture.invalid/owner/plugin.git";
-        fs::write(home.join(".gitconfig"),format!("[url \"file://{}\"]\n    insteadOf = {url}\n    insteadOf = https://github.com/fixture/plugin.git\n",repo.display())).unwrap();
+        fs::write(home.join(".gitconfig"),format!("[url \"{}\"]\n    insteadOf = {url}\n    insteadOf = https://github.com/fixture/plugin.git\n",crate::upstream::tests::file_url(&repo))).unwrap();
         let filtered = inspect(&engine, "github:fixture/plugin#main@FIXTURE-SKILL").unwrap();
         assert_eq!(filtered.skills.len(), 1);
         assert_eq!(

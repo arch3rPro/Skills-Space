@@ -117,3 +117,7 @@ SKILLS_SPACE_CODEX_TEST_BINARY=/absolute/path/to/codex cargo test --offline --ma
 ```
 
 It uses a temporary HOME, no model requests, and covers duplicate names, path/name rule ordering, native single-write differences, batch deduplication, semantic configuration conflicts, project aliases, content preservation and local plugin install/disable/enable/remove including dotted IDs. Codex UI changes additionally require isolated packaged-app checks for switches, batch selection, whole-plugin confirmation, custom CODEX_HOME and restart persistence. Never use the user's installed plugins as mutation fixtures.
+
+## Windows path boundaries
+
+Rust paths serialized to Node helpers, the upstream CLI or inventory records must use the same canonical spelling as the receiving runtime. Use `dunce::canonicalize` at those boundaries to handle Windows verbatim prefixes and short-name aliases; it is already present in the locked dependency graph. Keep real directory containment, symlink and shared-ownership checks. Pure Rust identity comparisons do not require broad replacement. Test Git file sources must be constructed with `reqwest::Url::from_file_path`, not `file://` plus `Path::display`, because backslashes are escapes in Git configuration.

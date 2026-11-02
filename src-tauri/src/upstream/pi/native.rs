@@ -178,7 +178,7 @@ fn commit(
         let count = entries.len();
         entries.retain(|entry| {
             entry["file"].as_str().is_none_or(|value| {
-                fs::canonicalize(value)
+                dunce::canonicalize(value)
                     .map(|p| p.to_string_lossy() != item.file)
                     .unwrap_or(value != item.file)
             })
@@ -487,7 +487,7 @@ fn change_batch(engine: &Engine, request: InvocationBatch) -> Result<Snapshot, S
             entries.retain(|entry| {
                 !native.iter().any(|item| {
                     entry["file"].as_str().is_some_and(|file| {
-                        fs::canonicalize(file).is_ok_and(|file| file.to_string_lossy() == item.file)
+                        dunce::canonicalize(file).is_ok_and(|file| file.to_string_lossy() == item.file)
                     })
                 })
             });
@@ -725,7 +725,7 @@ mod tests {
         let edited="---\nname: demo\ndescription: Local field\ndisable-model-invocation: false\n---\nLocal body\n";
         fs::write(&file, edited).unwrap();
         let policy = e.home.join(".pi/agent/skills-space-visibility.json");
-        write_settings(&policy,&serde_json::json!({"version":1,"hiddenSkills":[{"file":fs::canonicalize(&file).unwrap(),"name":"demo","hidden":true}]})).unwrap();
+        write_settings(&policy,&serde_json::json!({"version":1,"hiddenSkills":[{"file":dunce::canonicalize(&file).unwrap(),"name":"demo","hidden":true}]})).unwrap();
         let result = reconcile(&e, &global()).unwrap();
         assert_eq!(fs::read_to_string(&file).unwrap(), edited);
         assert_eq!(
@@ -837,7 +837,7 @@ mod tests {
         let value: serde_json::Value =
             serde_json::from_slice(&fs::read(&journal).unwrap()).unwrap();
         assert_eq!(
-            value["records"][fs::canonicalize(&file).unwrap().to_string_lossy().as_ref()]
+            value["records"][dunce::canonicalize(&file).unwrap().to_string_lossy().as_ref()]
                 ["sourceDefaultKnown"],
             false
         );

@@ -208,7 +208,7 @@ fn run_checked(
         .ok_or("Invalid affected package list.")?
         .iter()
         .filter_map(|item| item["root"].as_str())
-        .map(|root| fs::canonicalize(root).unwrap_or_else(|_| PathBuf::from(root)))
+        .map(|root| dunce::canonicalize(root).unwrap_or_else(|_| PathBuf::from(root)))
         .collect();
     let issues = |value: &Snapshot| {
         let relevant = |source: &serde_json::Value| {
@@ -431,14 +431,14 @@ mod tests {
         fs::write(
             home.join(".gitconfig"),
             format!(
-                "[url \"file://{}\"]\n\tinsteadOf = https://fixture.invalid/owner/package\n",
-                upstream.display()
+                "[url \"{}\"]\n\tinsteadOf = https://fixture.invalid/owner/package\n",
+                crate::upstream::tests::file_url(&upstream)
             ),
         )
         .unwrap();
         let project = home.join("project");
         fs::create_dir_all(project.join(".git")).unwrap();
-        write_settings(&agent.join("trust.json"), &serde_json::json!({fs::canonicalize(&project).unwrap().to_string_lossy().to_string():true})).unwrap();
+        write_settings(&agent.join("trust.json"), &serde_json::json!({dunce::canonicalize(&project).unwrap().to_string_lossy().to_string():true})).unwrap();
         let global_root = agent.join("git/fixture.invalid/owner/package");
         let local_root = project.join(".pi/git/fixture.invalid/owner/package");
         for path in [&global_root, &local_root] {
@@ -494,7 +494,7 @@ mod tests {
             )
             .unwrap();
         }
-        let origin = fs::canonicalize(global_root.join("skills/demo")).unwrap();
+        let origin = dunce::canonicalize(global_root.join("skills/demo")).unwrap();
         let mut distribution = crate::upstream::tests::addition(&origin, global.clone(), true);
         distribution.skills = vec!["demo".into()];
         distribution.agents = vec!["claude-code".into()];

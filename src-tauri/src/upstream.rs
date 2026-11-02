@@ -88,7 +88,7 @@ impl Target {
                 if !path.is_absolute() || !path.is_dir() {
                     return Err("Project directory must be an existing absolute path.".into());
                 }
-                fs::canonicalize(path).map_err(|e| e.to_string())
+                dunce::canonicalize(path).map_err(|e| e.to_string())
             }
             _ => Err("Invalid installation scope.".into()),
         }
@@ -314,6 +314,8 @@ impl Engine {
         let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
             .map(PathBuf::from)
             .ok_or("Home directory unavailable.")?;
+        #[cfg(windows)]
+        let home = dunce::canonicalize(home).map_err(|e| e.to_string())?;
         let resources = resource_directory(app)?;
         let node = node_runtime::resolve(app)?;
         Ok(Self {
@@ -660,13 +662,13 @@ impl Engine {
                         continue;
                     };
                     let (name, description) = (name.clone(), description.clone());
-                    let canonical = fs::canonicalize(&path)
+                    let canonical = dunce::canonicalize(&path)
                         .map_err(|e| e.to_string())?
                         .to_string_lossy()
                         .into_owned();
                     let source = listed.iter().find(|skill| {
                         skill.name == name
-                            && fs::canonicalize(&skill.path)
+                            && dunce::canonicalize(&skill.path)
                                 .ok()
                                 .is_some_and(|candidate| candidate.to_string_lossy() == canonical)
                     });
@@ -1024,6 +1026,7 @@ impl TemporaryDirectory {
             std::process::id()
         ));
         fs::create_dir(&path).map_err(|e| e.to_string())?;
+        let path = dunce::canonicalize(path).map_err(|e| e.to_string())?;
         Ok(Self(path))
     }
 }
@@ -1180,8 +1183,8 @@ fn contained_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     {
         return Err("Invalid source subdirectory.".into());
     }
-    let canonical = fs::canonicalize(root.join(path)).map_err(|e| e.to_string())?;
-    if !canonical.starts_with(fs::canonicalize(root).map_err(|e| e.to_string())?) {
+    let canonical = dunce::canonicalize(root.join(path)).map_err(|e| e.to_string())?;
+    if !canonical.starts_with(dunce::canonicalize(root).map_err(|e| e.to_string())?) {
         return Err("Source path escapes the repository.".into());
     }
     Ok(canonical)
@@ -1291,7 +1294,7 @@ fn inspect_with_options(
         if !Path::new(source).is_absolute() || !local.is_dir() {
             return Err("Choose an existing absolute local directory; the interface expands ~ before preview.".into());
         }
-        fs::canonicalize(local).map_err(|e| e.to_string())?
+        dunce::canonicalize(local).map_err(|e| e.to_string())?
     } else {
         let location = parsed_git_location(&parsed)?;
         temp = clone_repository(engine, &location)?;
@@ -1313,7 +1316,7 @@ fn inspect_directory(
     path: &Path,
 ) -> Result<Inspection, String> {
     engine.report_installation("checking", 0, 0);
-    let path = fs::canonicalize(path).map_err(|e| e.to_string())?;
+    let path = dunce::canonicalize(path).map_err(|e| e.to_string())?;
     let mut skills = Vec::new();
     let mut warnings = Vec::new();
     let groups = plugins::discover(engine, &path)?;
@@ -1558,7 +1561,7 @@ fn removal_plan(
         .target
         .directory(&engine.home)?
         .join(".agents/skills");
-    let canonical_base = fs::canonicalize(&canonical_base).unwrap_or(canonical_base);
+    let canonical_base = dunce::canonicalize(&canonical_base).unwrap_or(canonical_base);
     let lock = engine.lock(&operation.target)?;
     let mut plans = Vec::new();
     for name in &operation.skills {
@@ -1627,7 +1630,7 @@ fn removal_plan(
                     };
                     for entry in entries {
                         let path = entry.map_err(|error| error.to_string())?.path();
-                        if !fs::canonicalize(&path)
+                        if !dunce::canonicalize(&path)
                             .is_ok_and(|actual| actual.to_string_lossy() == record.path)
                         {
                             continue;
@@ -1637,7 +1640,7 @@ fn removal_plan(
                         let shared = !metadata.is_symlink()
                             && path
                                 .parent()
-                                .and_then(|parent| fs::canonicalize(parent).ok())
+                                .and_then(|parent| dunce::canonicalize(parent).ok())
                                 .as_ref()
                                 == Some(&canonical_base);
                         // A configured Hermes root can be a /private alias of the same shared directory.
@@ -2735,7 +2738,7 @@ fn source_snapshot_from_entry(
         .map(str::to_owned)
         .or(location.reference);
     let checkout = cache.checkout(engine, &location)?;
-    let root = fs::canonicalize(checkout.0.join("repo")).map_err(|e| e.to_string())?;
+    let root = dunce::canonicalize(checkout.0.join("repo")).map_err(|e| e.to_string())?;
     let document = entry["skillPath"]
         .as_str()
         .filter(|p| !p.is_empty())

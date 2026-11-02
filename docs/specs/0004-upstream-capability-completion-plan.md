@@ -521,3 +521,9 @@ The user authorized scoped Pi package inventory, installation/removal, existing 
 Windows专项`41431497384`已通过全部Pi测试，验证Git短路径修复；随后仅DSH私有文件可编辑测试失败，原因是隔离HOME未规范化而触发文件别名保护。夹具改为realpath(mkdtemp)，未放宽生产保护；DSH定向38项：8通过、30原宿主限定跳过。仅Windows继续专项验证，macOS／Linux原任务不重跑。
 
 Windows专项`41432030219`前端全通过；原生测试编译发现两个原本ignored的Unix shell测试缺cfg(unix)，以及链接清理测试只调用Unix symlink。按真实平台能力补测试限定及Windows链接创建／删除分支，保留替换目录不得删除的断言。构建增加失败时保存Rust依赖缓存，避免测试错误导致依赖编译缓存丢失。实际Windows原生结果待下一次专项验证，其他平台不重复触发。
+
+### 首轮构建集中排查（2026-11-03）
+
+`41430691986`的macOS ARM和Intel均已成功，分别保留installers-macos-arm64及installers-macos-x64产物，不重建。Linux检查注释明确为hosted runner与服务器失联，原生步骤无最终日志；仅重试其原job，不把失联推断为代码报错。Windows`41433124473`原生测试138通过、90失败、27忽略，按共同原因集中修复：33项直接路径前缀不一致、16项Git文件URI夹具转义错误，其余逐项核对库存／共享身份及平台合同。
+
+局部使用锁内dunce 1.0.5规范Rust↔Node／CLI路径边界，保留contains／符号链接／共享所有权校验；修复Windows目录链接删除方式。测试Git URI改为标准URL构造，平台路径预期不再写死POSIX；已有Unix专属临时使用控制测试按实际平台合同限定，并新增Windows拒绝操作且无内容／锁写入的回归。没有整树替换路径API或移除失败断言。集中修复已通过独立静态审查、全部修改Rust文件语法解析及locked/offline依赖元数据检查；补齐审查发现的共享链接／恢复／Pi扩展消费链遗漏，并新增文件URI往返、Rust↔Node真实路径及Windows不支持操作无写入回归。Windows真实编译、原生测试和安装包仍待本次专项运行，不将静态检查记作90项已恢复。当前修改尚未提交、推送或发布。

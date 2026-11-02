@@ -477,7 +477,7 @@ mod tests {
         let nested = inventory
             .skills
             .iter()
-            .find(|s| s.path == fs::canonicalize(&builtin).unwrap().to_string_lossy())
+            .find(|s| s.path == dunce::canonicalize(&builtin).unwrap().to_string_lossy())
             .unwrap();
         assert!(nested.source.is_none() && !nested.cli_managed && !nested.updateable);
         let flat = inventory
@@ -485,7 +485,7 @@ mod tests {
             .iter()
             .find(|s| {
                 s.name == "bundled-demo"
-                    && s.path != fs::canonicalize(&builtin).unwrap().to_string_lossy()
+                    && s.path != dunce::canonicalize(&builtin).unwrap().to_string_lossy()
             })
             .unwrap();
         assert!(flat.cli_managed && flat.cli_agents.contains(&"hermes-agent".into()));

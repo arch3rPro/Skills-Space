@@ -482,7 +482,7 @@ fn creation_review(
     } else {
         normalized_ancestor
     };
-    if fs::canonicalize(ancestor).map_err(|e| e.to_string())? != normalized_ancestor
+    if dunce::canonicalize(ancestor).map_err(|e| e.to_string())? != normalized_ancestor
         || root["source"] == "bundled"
     {
         return Err("Linked DSH creation roots are read-only.".into());
@@ -515,7 +515,7 @@ fn creation_review(
             }),
     );
     for path in protected {
-        let actual = fs::canonicalize(&path).unwrap_or(path);
+        let actual = dunce::canonicalize(&path).unwrap_or(path);
         if plan.skill_path().starts_with(actual) {
             return Err(
                 "Shared, managed and bundled roots cannot receive native skill files.".into(),
@@ -596,7 +596,7 @@ mod tests {
             format!("---\r\n# retain\r\nname: {name}\r\ndescription: Fixture\r\n---\r\nBody\r\n"),
         )
         .unwrap();
-        fs::canonicalize(file).unwrap()
+        dunce::canonicalize(file).unwrap()
     }
     fn install_original_runtime(home: &Path) {
         let Some(package) = std::env::var_os("SKILLS_SPACE_DSH_TEST_INSTALL").map(PathBuf::from)
@@ -1108,7 +1108,7 @@ mod tests {
         let temp = TemporaryDirectory::new().unwrap();
         let home = temp.0.join("home");
         fs::create_dir_all(&home).unwrap();
-        let home = fs::canonicalize(home).unwrap();
+        let home = dunce::canonicalize(home).unwrap();
         let e = engine(&home);
         let root = home.join(".dsh/skills").to_string_lossy().into_owned();
         for name in ["bad_name", "bad--name", "-bad", "bad-", ""] {
@@ -1170,7 +1170,7 @@ mod tests {
         let temp = TemporaryDirectory::new().unwrap();
         let home = temp.0.join("home");
         fs::create_dir_all(&home).unwrap();
-        let home = fs::canonicalize(home).unwrap();
+        let home = dunce::canonicalize(home).unwrap();
         let e = engine(&home);
         let profile = profile(&home);
         let shared = home.join("configured-shared");

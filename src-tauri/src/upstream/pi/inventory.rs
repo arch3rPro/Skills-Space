@@ -283,7 +283,7 @@ mod tests {
         );
         let project_dir = root.0.join("project");
         fs::create_dir_all(project_dir.join(".pi")).unwrap();
-        let project_dir = fs::canonicalize(project_dir).unwrap();
+        let project_dir = dunce::canonicalize(project_dir).unwrap();
         write_settings(
             &project_dir.join(".pi/settings.json"),
             &serde_json::json!({"projectKeep":true}),

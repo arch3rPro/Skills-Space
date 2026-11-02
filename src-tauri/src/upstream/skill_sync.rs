@@ -259,7 +259,7 @@ fn resolved_parent(path: &Path) -> Result<PathBuf, String> {
             .parent()
             .ok_or("Cannot resolve target directory.")?;
     }
-    let mut actual = fs::canonicalize(ancestor).map_err(|e| e.to_string())?;
+    let mut actual = dunce::canonicalize(ancestor).map_err(|e| e.to_string())?;
     for part in tail.into_iter().rev() {
         actual.push(part)
     }
@@ -507,6 +507,13 @@ fn copy_directory(source: &Path, target: &Path) -> Result<(), String> {
 }
 fn remove_destination(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileTypeExt;
+        if metadata.file_type().is_symlink_dir() {
+            return fs::remove_dir(path).map_err(|e| e.to_string());
+        }
+    }
     if metadata.is_dir() && !metadata.is_symlink() {
         fs::remove_dir_all(path)
     } else {
@@ -802,7 +809,7 @@ pub(super) fn sync(engine: &Engine, op: &Operation) -> Result<OperationResult, S
     let inventory = engine.inventory(&op.target)?;
     let folder = restoration::folder_name(&origin.name);
     let mut source =
-        fs::canonicalize(source_path(engine, origin, &installed)).map_err(|e| e.to_string())?;
+        dunce::canonicalize(source_path(engine, origin, &installed)).map_err(|e| e.to_string())?;
     if let Some(parent) = data
         .records
         .iter()
@@ -827,7 +834,7 @@ pub(super) fn sync(engine: &Engine, op: &Operation) -> Result<OperationResult, S
                 .zip(slots)
             {
                 let target = resolved_parent(&path)?;
-                if target == source || fs::canonicalize(&target).is_ok_and(|p| p == source) {
+                if target == source || dunce::canonicalize(&target).is_ok_and(|p| p == source) {
                     continue;
                 }
                 if target.starts_with(&source) || source.starts_with(&target) {
@@ -843,7 +850,7 @@ pub(super) fn sync(engine: &Engine, op: &Operation) -> Result<OperationResult, S
             .find(|a| &a.id == id && id != "eve")
             .ok_or("Unsupported sync target.")?;
         let target = resolved_parent(&Path::new(&a.path).join(&folder))?;
-        if target == source || fs::canonicalize(&target).is_ok_and(|p| p == source) {
+        if target == source || dunce::canonicalize(&target).is_ok_and(|p| p == source) {
             continue;
         }
         if target.starts_with(&source) || source.starts_with(&target) {
@@ -953,7 +960,7 @@ pub(super) fn augment(engine: &Engine, target: &Target, inventory: &mut Inventor
                 && (s.path == r.destination
                     || !r.copy
                         && owned_link(r, &p)
-                        && fs::canonicalize(&p).is_ok_and(|v| v.to_string_lossy() == s.path))
+                        && dunce::canonicalize(&p).is_ok_and(|v| v.to_string_lossy() == s.path))
         });
         if let Some(s) = existing {
             // Never silently take over another manager's installation.
@@ -1158,11 +1165,7 @@ pub(super) fn remove(engine: &Engine, op: &Operation) -> Result<OperationResult,
                 if !owned_link(r, &p) {
                     return Err("Sync link was replaced; target retained.".into());
                 }
-                if r.single_file {
-                    remove_destination(&p)?;
-                } else {
-                    fs::remove_file(p).map_err(|e| e.to_string())?;
-                }
+                remove_destination(&p)?;
             }
             Ok(())
         })();
@@ -1326,8 +1329,8 @@ mod tests {
             "fixture-skill:1234567890abcdef\n",
         )
         .unwrap();
-        let home = fs::canonicalize(home).unwrap();
-        let source = fs::canonicalize(source).unwrap();
+        let home = dunce::canonicalize(home).unwrap();
+        let source = dunce::canonicalize(source).unwrap();
         let e = engine(&home);
         let o = Origin {
             target: global(),
@@ -1801,8 +1804,8 @@ mod lifecycle_tests {
         fs::write(
             home.join(".gitconfig"),
             format!(
-                "[url \"file://{}\"]\n insteadOf = {url}\n",
-                source.display()
+                "[url \"{}\"]\n insteadOf = {url}\n",
+                crate::upstream::tests::file_url(&source)
             ),
         )
         .unwrap();
@@ -1917,9 +1920,9 @@ mod project_tests {
             "---\nname: native\ndescription: Project local fixture\n---\nBody\n",
         )
         .unwrap();
-        let home = fs::canonicalize(home).unwrap();
-        let source = fs::canonicalize(source).unwrap();
-        let project = fs::canonicalize(project).unwrap();
+        let home = dunce::canonicalize(home).unwrap();
+        let source = dunce::canonicalize(source).unwrap();
+        let project = dunce::canonicalize(project).unwrap();
         let e = engine(&home);
         let target = Target {
             host: "local".into(),
