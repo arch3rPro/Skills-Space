@@ -3,6 +3,7 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
+import {readFileSync} from 'node:fs';
 
 const common = [
   "versions::tests::stable_versions_compare_numerically_and_reject_unusable_tags",
@@ -67,10 +68,20 @@ function main() {
   const [scope = 'critical', target] = process.argv.slice(2);
   if (!['critical', 'full'].includes(scope)) throw Error('Expected critical or full native test scope.');
   const args = ['test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', ...(target ? ['--target', target] : []), '--lib'];
+  const artifactFile = process.env.NATIVE_TEST_ARTIFACTS;
+  let binary;
+  if (artifactFile) {
+    const artifacts = readFileSync(artifactFile, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line))
+      .filter(value => value.reason === 'compiler-artifact' && value.target?.name === 'skills_space_lib' && value.profile?.test && value.executable);
+    if (artifacts.length !== 1) throw Error('Expected one compiled native test executable from Cargo.');
+    binary = artifacts[0].executable;
+  }
+  const command = binary || 'cargo';
+  const runnerArgs = binary ? [] : [...args, '--'];
   let selected = [];
   if (scope === 'critical') {
     const list = extra => {
-      const result = spawnSync('cargo', [...args, '--', '--list', ...extra], {encoding:'utf8', stdio:['ignore','pipe','inherit']});
+      const result = spawnSync(command, [...runnerArgs, '--list', ...extra], {encoding:'utf8', stdio:['ignore','pipe','inherit']});
       if (result.error) throw result.error;
       if (result.status !== 0) process.exit(result.status ?? 1);
       return new Set(result.stdout.split(/\r?\n/).filter(line => line.endsWith(': test')).map(line => line.slice(0, -6)));
@@ -78,7 +89,7 @@ function main() {
     selected = selectCritical(list([]), list(['--ignored']));
   }
   console.log(scope === 'critical' ? `Running ${selected.length} required native checks.` : 'Running the explicitly selected full native suite.');
-  const result = spawnSync('cargo', [...args, '--', '--test-threads=1', ...(selected.length ? ['--exact', ...selected] : [])], {stdio:'inherit'});
+  const result = spawnSync(command, [...runnerArgs, '--test-threads=1', ...(selected.length ? ['--exact', ...selected] : [])], {stdio:'inherit'});
   if (result.error) throw result.error;
   process.exit(result.status ?? 1);
 }
