@@ -378,9 +378,9 @@ fn target_review(
         let path = resolved_parent(&Path::new(&a.path).join(&folder))?;
         if relations.records.iter().any(|r| {
             r.target == *target
-                && r.destination == path.to_string_lossy()
+                && Path::new(&r.destination) == path
                 && r.name == origin.name
-                && r.source == origin.path
+                && Path::new(&r.source) == Path::new(&origin.path)
                 && r.pending.is_some()
         }) {
             continue;
@@ -810,11 +810,11 @@ pub(super) fn sync(engine: &Engine, op: &Operation) -> Result<OperationResult, S
     let folder = restoration::folder_name(&origin.name);
     let mut source =
         dunce::canonicalize(source_path(engine, origin, &installed)).map_err(|e| e.to_string())?;
-    if let Some(parent) = data
-        .records
-        .iter()
-        .find(|r| r.destination == installed.path && r.baseline == desired && r.pending.is_none())
-    {
+    if let Some(parent) = data.records.iter().find(|r| {
+        Path::new(&r.destination) == Path::new(&installed.path)
+            && r.baseline == desired
+            && r.pending.is_none()
+    }) {
         let upstream = Path::new(&parent.source);
         if fingerprint(upstream).ok().as_deref() == Some(&desired) {
             source = upstream.to_path_buf();
@@ -863,8 +863,8 @@ pub(super) fn sync(engine: &Engine, op: &Operation) -> Result<OperationResult, S
         let copy = op.copy || eve_slot.is_some();
         let result = (|| {
             let index = if let Some(i) = data.records.iter().position(|r| {
-                r.destination == target.to_string_lossy()
-                    && r.source == source.to_string_lossy()
+                Path::new(&r.destination) == target
+                    && Path::new(&r.source) == source
                     && r.name == origin.name
             }) {
                 i
@@ -916,7 +916,11 @@ pub(super) fn sync(engine: &Engine, op: &Operation) -> Result<OperationResult, S
 }
 pub(super) fn version(engine: &Engine, target: &Target, skill: &Skill) -> Option<String> {
     if let Ok(data) = read(engine) {
-        if let Some(r) = data.records.iter().find(|r| r.destination == skill.path) {
+        if let Some(r) = data
+            .records
+            .iter()
+            .find(|r| Path::new(&r.destination) == Path::new(&skill.path))
+        {
             return Some(r.baseline.clone());
         }
     }
@@ -957,10 +961,10 @@ pub(super) fn augment(engine: &Engine, target: &Target, inventory: &mut Inventor
         };
         let existing = inventory.skills.iter_mut().find(|s| {
             (s.name == r.name || r.eve_slot.is_some())
-                && (s.path == r.destination
+                && (Path::new(&s.path) == Path::new(&r.destination)
                     || !r.copy
                         && owned_link(r, &p)
-                        && dunce::canonicalize(&p).is_ok_and(|v| v.to_string_lossy() == s.path))
+                        && dunce::canonicalize(&p).is_ok_and(|v| v == Path::new(&s.path)))
         });
         if let Some(s) = existing {
             // Never silently take over another manager's installation.
@@ -1115,7 +1119,10 @@ pub(super) fn propagate(engine: &Engine, sources: &[String]) -> Result<Vec<ItemR
     });
     save(engine, &data)?;
     for index in 0..data.records.len() {
-        if !sources.contains(&data.records[index].source) {
+        if !sources
+            .iter()
+            .any(|source| Path::new(source) == Path::new(&data.records[index].source))
+        {
             continue;
         }
         let name = data.records[index].name.clone();
@@ -1151,7 +1158,7 @@ pub(super) fn remove(engine: &Engine, op: &Operation) -> Result<OperationResult,
                         && plan
                             .paths
                             .iter()
-                            .any(|v| v.selected && v.path == r.destination)
+                            .any(|v| v.selected && Path::new(&v.path) == Path::new(&r.destination))
                 })
             }) {
                 return Err("Removal target changed. Review again.".into());
@@ -1251,7 +1258,7 @@ pub(super) fn update_args(engine: &Engine, op: &Operation) -> Result<Option<Vec<
             && inventory
                 .skills
                 .iter()
-                .any(|s| s.name == *name && s.path == r.source)
+                .any(|s| s.name == *name && Path::new(&s.path) == Path::new(&r.source))
     }) {
         return Ok(None);
     }
@@ -1415,18 +1422,31 @@ mod tests {
             let changed = original.replace("Single body", "Updated body");
             fs::write(&source, &changed).unwrap();
             if copy {
+                let sources = vec![format!(
+                    "{}/./{}",
+                    source
+                        .parent()
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                    source.file_name().unwrap().to_string_lossy()
+                )];
                 fs::write(target.join("SKILL.md"), "Local edits").unwrap();
-                let result = propagate(&e, &[source.to_string_lossy().into()]).unwrap();
+                let result = propagate(&e, &sources).unwrap();
+                assert_eq!(
+                    result.len(),
+                    1,
+                    "equivalent source paths must select the relation"
+                );
                 assert!(result.iter().any(|i| i.status == "failed"));
                 assert_eq!(
                     fs::read_to_string(target.join("SKILL.md")).unwrap(),
                     "Local edits"
                 );
                 fs::write(target.join("SKILL.md"), original).unwrap();
-                assert!(propagate(&e, &[source.to_string_lossy().into()])
-                    .unwrap()
-                    .iter()
-                    .all(|i| i.status == "complete"));
+                let result = propagate(&e, &sources).unwrap();
+                assert_eq!(result.len(), 1, "retry must process the reviewed relation");
+                assert!(result.iter().all(|i| i.status == "complete"));
             }
             assert_eq!(
                 fs::read_to_string(target.join("SKILL.md")).unwrap(),
