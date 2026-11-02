@@ -9,21 +9,33 @@ import {pathToFileURL} from 'node:url';
 import ts from 'typescript';
 
 function files(directory){return readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?files(join(directory,entry.name)):/\.tsx?$/.test(entry.name)?[join(directory,entry.name)]:[]);}
-test('native title hints are absent across application sources; semantic titles remain allowed',()=>{
+// These props render visible headings/labels; they are not DOM title hints.
+const semanticTitles=new Set(['Modal','FlowError','SkillNames','ProjectSkillList','SkillDetailHeader','DshSettingsDisclosure']);
+function titleHintFailures(file,text){
  const failures=[];
- const semantic=new Set(['Modal','FlowError','SkillNames','ProjectSkillList']);
- for(const file of files('src')){
-  const source=ts.createSourceFile(file,readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);
-  function visit(node){
-   if(ts.isJsxAttribute(node)&&node.name.getText(source)==='title'){
-    const tag=node.parent.parent.tagName.getText(source);
-    if(!semantic.has(tag))failures.push(`${file}:${source.getLineAndCharacterOfPosition(node.pos).line+1} ${tag}`);
-   }
-   ts.forEachChild(node,visit);
+ const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);
+ function visit(node){
+  if(ts.isJsxAttribute(node)&&node.name.getText(source)==='title'){
+   const tag=node.parent.parent.tagName.getText(source);
+   if(!semanticTitles.has(tag))failures.push(`${file}:${source.getLineAndCharacterOfPosition(node.pos).line+1} ${tag}`);
   }
-  visit(source);
+  ts.forEachChild(node,visit);
  }
+ visit(source);
+ return failures;
+}
+test('native title hints are absent across application sources; semantic titles remain allowed',()=>{
+ const failures=files('src').flatMap(file=>titleHintFailures(file,readFileSync(file,'utf8')));
  assert.deepEqual(failures,[],'Use the shared Tooltip composition instead of browser title hints');
+});
+test('semantic heading props do not exempt native or forwarding component title hints',()=>{
+ const failures=titleHintFailures('fixture.tsx',`<>
+  <SkillDetailHeader title="Visible heading" />
+  <DshSettingsDisclosure title="Visible label" />
+  <Button title="Native hint" />
+  <button title="Native hint" />
+ </>`);
+ assert.deepEqual(failures,['fixture.tsx:4 Button','fixture.tsx:5 button']);
 });
 
 // Render the installed components together: both Radix primitives own data-state.

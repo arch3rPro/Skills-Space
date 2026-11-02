@@ -513,3 +513,5 @@ The user authorized scoped Pi package inventory, installation/removal, existing 
 ## 手动构建与版本发布（2026-11-02）
 
 用户明确要求所有提交／推送均不自动触发构建。新增两个仅workflow_dispatch入口：四平台安装包构建、复用指定成功run的Release草稿。矩阵不连带取消其他平台，支持GitHub仅重跑失败任务；不同提交不混用产物。无证书阶段macOS采用ad-hoc签名、Windows未签名，未接入自动更新。首版说明按新增功能／功能优化／Bug修复组织，后续必须基于上一已发布正式版的实际差异总结。当前未触发GitHub构建、创建标签／草稿或发布。独立测试审查新增13项隔离回归并全部通过，覆盖五份安装包汇总、缺失平台、跨提交／run／版本混用、校验和、Windows换行、发布说明基线／分类及既有tag冲突；两个工作流通过actionlint和YAML解析。修复审查发现的Tauri透传--locked参数位置、Windows锁文件CRLF解析、既有草稿目标提交同步及发布说明忽略规则；原生测试前置到打包前。未改应用界面，跳过UI审查；本地未运行应用构建；用户随后授权提交、推送并手动触发四平台构建，GitHub runner执行结果、签名产物及实际安装结果分别记录，不预先标记通过。未授权创建Release草稿或发布。
+
+首轮GitHub构建`41429844229`：选择任务通过，四个平台均在前端合同测试因随包脚本尚未staging而失败，未生成成功安装包。修复工作流顺序为安装依赖→版本校验→资源准备→前端测试→原生测试→打包；同步README／开发及发布指南的干净检出前置步骤。不删除或放宽失败断言。干净检出按锁安装及staging后，前序合同测试通过，末尾overlay检查发现既有语义标题名单漏项：SkillDetailHeader和DshSettingsDisclosure将title渲染为可见内容，非DOM提示。精确补充名单，并新增Button／button原生title仍被拦截的回归；overlay定向3/3通过，复用其余已通过结果；宿主限定Pi2项／DSH30项仍按既有条件跳过。actionlint及文档引用检查通过，生产组件未修改。修复后构建与后续平台结果待记录，不创建Release。

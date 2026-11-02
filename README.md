@@ -116,6 +116,7 @@ The app uses **React 19, TypeScript, Vite, Tauri 2, and Rust**. Presentation liv
 Run frontend checks and prepare the CLI resources before native tests:
 
 ```bash
+pnpm stage:upstream
 pnpm test:frontend-contracts
 pnpm build
 pnpm test:native

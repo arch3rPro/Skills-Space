@@ -10,7 +10,7 @@ Both workflows use only `workflow_dispatch`. Pushes, pull requests, tags and rel
 2. In Actions, select **Build installers (manual)**, select that branch, and choose all or one platform.
 3. Download the `installers-*` artifacts from the run. Each contains installers and `build.json` with version, source SHA, run ID and SHA-256 checksums. Retention is 30 days.
 
-The matrix covers macOS arm64 (macos-15), macOS x64 (macos-15-intel), Windows x64 (windows-2022), and Linux x64 (ubuntu-22.04). macOS uses ad-hoc signing without notarization; Windows is unsigned. No certificates or updater signing keys are required. Node is not bundled. Existing staging and CLI contracts remain unchanged. Frontend contract tests and staged native tests run before packaging; Tauri then runs its existing frontend build hook. Staging and native tests stay sequential.
+The matrix covers macOS arm64 (macos-15), macOS x64 (macos-15-intel), Windows x64 (windows-2022), and Linux x64 (ubuntu-22.04). macOS uses ad-hoc signing without notarization; Windows is unsigned. No certificates or updater signing keys are required. Node is not bundled. Existing staging and CLI contracts remain unchanged. Resource staging runs before both frontend contract tests and native tests; both test suites run before packaging; Tauri then runs its existing frontend build hook. Staging and native tests stay sequential.
 
 `fail-fast: false` lets other platforms finish after one fails. For transient failures, use **Re-run failed jobs** or `gh run rerun RUN_ID --failed`; successful jobs and their artifacts are retained. A run containing only one platform is useful for diagnosis, but cannot produce the complete release draft. An explicit full rerun replaces that platform's artifact.
 

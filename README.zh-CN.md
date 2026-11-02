@@ -116,6 +116,7 @@ CI=false pnpm tauri dev
 先运行前端检查并准备 CLI 资源，再执行原生测试：
 
 ```bash
+pnpm stage:upstream
 pnpm test:frontend-contracts
 pnpm build
 pnpm test:native
