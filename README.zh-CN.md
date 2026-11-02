@@ -1,6 +1,8 @@
-<h1 align="center">
-  <img src="./src/assets/icon.png" width="42" height="42" align="middle" alt="Skills Space 标识"> Skills Space
-</h1>
+<p align="center">
+  <img src="./src/assets/icon.png" width="64" height="64" alt="Skills Space 标识">
+</p>
+
+<h1 align="center">Skills Space</h1>
 
 <p align="center"><strong>集中发现、安装和管理不同 AI Agent 的技能。</strong></p>
 
@@ -32,23 +34,53 @@ Skills Space 是一款跨 Agent 的桌面技能管理工具，面向 Codex、Cla
 | **更新与维护** | 检查更新和本地差异，核对共享卸载影响，支持批量处理、项目依赖安装与锁文件恢复。 |
 | **配置与扩展** | 管理技能目录、Agent 设置与 DSH 预设，以及 Codex 插件和 Pi 扩展包。 |
 
-安装、更新和卸载复用固定版本的原版 [Vercel skills CLI](https://github.com/vercel-labs/skills)，不维护独立分叉。
+安装、更新和卸载复用原版 [Vercel skills CLI](https://github.com/vercel-labs/skills)，保持与上游安装流程一致。
 
 ## Agent 适配
 
-**通用支持**按照随应用固定的 skills CLI 的 Agent 定义提供技能安装与维护。**增强适配**进一步提供各 Agent 的专属管理能力：
+### 增强适配
+
+在通用安装与维护能力之外，提供以下 Agent 的专属管理功能：
 
 | Agent | 增强能力 |
 | --- | --- |
-| Codex | 原生技能控制、本地插件与市场，以及支持的全局／项目设置。 |
+| Codex | 原生技能启停、本地插件与市场、技能目录预算、插件默认状态及账号工具设置。 |
 | Pi | 技能目录、启用／停用与调用控制、代码模式设置、扩展包管理。 |
 | Hermes | 技能目录、项目发现与信任、启用／停用、预加载设置。 |
 | DeepSeek Harness（DSH） | 配置文件与预设发现、技能目录、独立启停与调用策略。 |
 
-DSH 的独立策略需要通过 Skills Space 安装配套插件，不修改技能文件；使用同一实际技能文件的位置会共享该文件的策略。作用范围与生效方式见 [DSH 说明](./docs/specs/0012-dsh-settings-native-skills-rebuild.md)。
+DSH 的启停与调用控制通过 Skills Space 安装配套插件实现，无需修改技能文件。使用方式见 [DSH 说明](./docs/specs/0012-dsh-settings-native-skills-rebuild.md)。
 
-> [!NOTE]
-> 可用操作取决于技能来源、归属、Agent 和范围。发现磁盘上的技能不代表正在运行的 Agent 已加载它。当前主要验证 macOS arm64，其他平台及尚待验证的场景见[后续计划](./docs/specs/0004-upstream-capability-completion-plan.md)。
+### 通用支持
+
+按照固定版本 **skills CLI 1.7.4** 的 Agent 定义提供技能安装与维护，包括 Claude Code、Cursor、Gemini CLI、GitHub Copilot、OpenCode、Windsurf、Cline、Roo Code 等。
+
+<details>
+<summary>查看全部 75 个通用支持 Agent</summary>
+
+| Agent | Agent | Agent | Agent |
+| --- | --- | --- | --- |
+| AdaL | AiderDesk | Amp | Antigravity |
+| Antigravity CLI | AstrBot | Augment | Autohand Code CLI |
+| Claude Code | Cline | Code Studio | CodeArts Agent |
+| CodeBuddy | Codemaker | Command Code | Continue |
+| Cortex Code | Crush | Cursor | Deep Agents |
+| Devin for Terminal | Dexto | Droid | Eve |
+| Firebender | ForgeCode | fx | Gemini CLI |
+| GitHub Copilot | Goose | Grok Build | IBM Bob |
+| iFlow CLI | inference.sh | Jazz | Junie |
+| Kilo Code | Kimchi | Kimi Code CLI | Kiro CLI |
+| Kode | Lingma | Loaf | MCPJam |
+| MiniMax Code | Mistral Vibe | Moxby | Mux |
+| Neovate | Ona | OpenClaw | OpenCode |
+| OpenHands | Pochi | Posit Assistant | PromptScript |
+| Qoder | Qoder CN | Qwen Code | Reasonix |
+| Replit | Roo Code | Rovo Dev | Sarvam Code |
+| Tabnine CLI | Terramind | Tinycloud | Trae |
+| Trae CN | Warp | Windsurf | ZCode |
+| Zed | Zencoder | Zenflow |  |
+
+</details>
 
 ## 快速开始
 
@@ -72,7 +104,7 @@ CI=false pnpm tauri dev
 3. 检查来源，选择技能与目标 Agent，核对安装设置。
 4. 确认安装，在技能空间或对应 Agent 页面查看结果。
 
-打包后的应用会自动检测 Node，也可在「设置 → 全局」选择可执行文件。缺少兼容运行时，应用会将固定版本的官方 Node 下载到应用数据目录，不替换系统 Node 或已安装命令。
+应用会自动检测 Node，缺少兼容版本时自动准备，也可在「设置 → 全局」手动选择。
 
 ## 开发
 

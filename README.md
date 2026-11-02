@@ -1,6 +1,8 @@
-<h1 align="center">
-  <img src="./src/assets/icon.png" width="42" height="42" align="middle" alt="Skills Space logo"> Skills Space
-</h1>
+<p align="center">
+  <img src="./src/assets/icon.png" width="64" height="64" alt="Skills Space logo">
+</p>
+
+<h1 align="center">Skills Space</h1>
 
 <p align="center"><strong>Discover, install, and manage skills across your AI agents.</strong></p>
 
@@ -32,23 +34,53 @@ Skills Space is a desktop application for managing skills across Codex, Claude C
 | **Updates and maintenance** | Check updates and local differences, review shared removal impact, run batch actions, and install from project dependencies or supported lockfile entries. |
 | **Configuration and extensions** | Manage skill directories, agent settings, DSH presets, Codex plugins, and Pi extension packages. |
 
-Installation, updates, and removal use a pinned, unmodified [Vercel skills CLI](https://github.com/vercel-labs/skills), without a separate fork.
+Installation, updates, and removal use the original [Vercel skills CLI](https://github.com/vercel-labs/skills), keeping the installation flow aligned with upstream.
 
 ## Agent integrations
 
-**General support** follows the agent definitions in the bundled skills CLI for installation and maintenance. **Enhanced integration** adds agent-specific management:
+### Enhanced integration
+
+Agent-specific management in addition to general installation and maintenance:
 
 | Agent | Additional capabilities |
 | --- | --- |
-| Codex | Native skill controls, local plugins and marketplaces, and supported global/project settings. |
+| Codex | Native skill enable/disable, local plugins and marketplaces, skill catalog budget, plugin defaults, and account tool settings. |
 | Pi | Skill directories, enable/disable and invocation controls, code mode settings, and extension packages. |
 | Hermes | Skill directories, project discovery and trust, enable/disable, and preload settings. |
 | DeepSeek Harness (DSH) | Configuration-file and preset discovery, skill directories, and independent enable/disable and invocation policies. |
 
-DSH's independent policies require the companion plugin installed through Skills Space. They preserve skill files; the policy is shared wherever the same physical skill file is used. See the [DSH guide](./docs/specs/0012-dsh-settings-native-skills-rebuild.md) for scope and activation details.
+DSH enable/disable and invocation controls use a companion plugin installed through Skills Space, without modifying skill files. See the [DSH guide](./docs/specs/0012-dsh-settings-native-skills-rebuild.md) for setup and usage.
 
-> [!NOTE]
-> Available actions depend on the skill's source, ownership, agent, and scope. A skill found on disk is not proof that a running agent has loaded it. Current verification primarily covers macOS arm64; other platforms and remaining scenarios are tracked in the [roadmap](./docs/specs/0004-upstream-capability-completion-plan.md).
+### General support
+
+Installation and maintenance follow the agent definitions in the pinned **skills CLI 1.7.4**, including Claude Code, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Windsurf, Cline, and Roo Code.
+
+<details>
+<summary>View all 75 generally supported agents</summary>
+
+| Agent | Agent | Agent | Agent |
+| --- | --- | --- | --- |
+| AdaL | AiderDesk | Amp | Antigravity |
+| Antigravity CLI | AstrBot | Augment | Autohand Code CLI |
+| Claude Code | Cline | Code Studio | CodeArts Agent |
+| CodeBuddy | Codemaker | Command Code | Continue |
+| Cortex Code | Crush | Cursor | Deep Agents |
+| Devin for Terminal | Dexto | Droid | Eve |
+| Firebender | ForgeCode | fx | Gemini CLI |
+| GitHub Copilot | Goose | Grok Build | IBM Bob |
+| iFlow CLI | inference.sh | Jazz | Junie |
+| Kilo Code | Kimchi | Kimi Code CLI | Kiro CLI |
+| Kode | Lingma | Loaf | MCPJam |
+| MiniMax Code | Mistral Vibe | Moxby | Mux |
+| Neovate | Ona | OpenClaw | OpenCode |
+| OpenHands | Pochi | Posit Assistant | PromptScript |
+| Qoder | Qoder CN | Qwen Code | Reasonix |
+| Replit | Roo Code | Rovo Dev | Sarvam Code |
+| Tabnine CLI | Terramind | Tinycloud | Trae |
+| Trae CN | Warp | Windsurf | ZCode |
+| Zed | Zencoder | Zenflow |  |
+
+</details>
 
 ## Quick start
 
@@ -72,7 +104,7 @@ The commands above use a POSIX shell. `tauri dev` prepares the bundled CLI and s
 3. Inspect the source, select skills and target agents, and review the installation settings.
 4. Confirm, then inspect the results in your skill collection or the agent's page.
 
-For a packaged app, Node is detected automatically. You can select an executable in **Settings → Global**. If no compatible runtime is available, the app downloads a pinned official Node into its application data directory; it does not replace your system Node or installed commands.
+The app detects Node automatically and prepares a compatible version when needed. You can also select one manually in **Settings → Global**.
 
 ## Development
 
