@@ -788,7 +788,7 @@ mod tests {
             .join("skills-lock.json")
             .exists());
     }
-    #[cfg(windows)]
+    #[cfg_attr(not(windows), ignore = "Windows temporary-use capability contract")]
     #[test]
     fn unsupported_temporary_use_refuses_without_writing_sessions_or_skills() {
         let (_f, e, source, cache, project) = fixture();
@@ -799,7 +799,7 @@ mod tests {
                 target: project.clone(),
                 source: source.to_string_lossy().into_owned(),
                 skill: "fixture-skill".into(),
-                source_fingerprint: "not-inspected-on-unsupported-platform".into(),
+                source_fingerprint: None,
                 include_internal: false,
                 mode: mode.into(),
                 agent: agent.map(str::to_owned),

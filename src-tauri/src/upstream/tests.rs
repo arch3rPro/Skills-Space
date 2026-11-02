@@ -15,9 +15,8 @@ fn fixture_file_urls_preserve_reserved_characters_and_native_paths() {
         path
     );
 }
-#[cfg(windows)]
 #[test]
-fn rust_and_node_canonical_paths_agree_for_existing_windows_directories() {
+fn rust_and_node_canonical_paths_agree_for_existing_platform_directories() {
     let fixture = TemporaryDirectory::new().unwrap();
     let path = fixture.0.join("canonical fixture with spaces");
     fs::create_dir(&path).unwrap();
