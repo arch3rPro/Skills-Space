@@ -15,7 +15,7 @@ const originalMinimalPatch=process.env.SKILLS_SPACE_DSH_TEST_MINIMAL_PATCH;
 const configurationTest=(name,run)=>test(name,{skip:!testInstall?'Set SKILLS_SPACE_DSH_TEST_INSTALL to an original DSH package root':false},run);
 const document = (name, extra = "") => `---\nname: ${name}\ndescription: Fixture\n${extra}---\nBody\n`;
 async function fixture(run, withRuntime=true) {
-  const home = await mkdtemp(join(tmpdir(), "dsh-inspection-"));
+  const home = await realpath(await mkdtemp(join(tmpdir(), "dsh-inspection-")));
   try {
     if(withRuntime&&testInstall){const manifest=JSON.parse(await readFile(join(testInstall,'package.json'),'utf8'));assert.equal(manifest.name,'@deepseek-ai/dsh');const bin=typeof manifest.bin==='string'?manifest.bin:manifest.bin.dsh;await mkdir(join(home,'.local/bin'),{recursive:true});await symlink(join(testInstall,bin),join(home,'.local/bin/dsh'));}
     await run(home);

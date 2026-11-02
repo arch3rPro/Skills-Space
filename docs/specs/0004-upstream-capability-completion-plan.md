@@ -517,3 +517,5 @@ The user authorized scoped Pi package inventory, installation/removal, existing 
 首轮GitHub构建`41429844229`：选择任务通过，四个平台均在前端合同测试因随包脚本尚未staging而失败，未生成成功安装包。修复工作流顺序为安装依赖→版本校验→资源准备→前端测试→原生测试→打包；同步README／开发及发布指南的干净检出前置步骤。不删除或放宽失败断言。干净检出按锁安装及staging后，前序合同测试通过，末尾overlay检查发现既有语义标题名单漏项：SkillDetailHeader和DshSettingsDisclosure将title渲染为可见内容，非DOM提示。精确补充名单，并新增Button／button原生title仍被拦截的回归；overlay定向3/3通过，复用其余已通过结果；宿主限定Pi2项／DSH30项仍按既有条件跳过。actionlint及文档引用检查通过，生产组件未修改。修复后构建与后续平台结果待记录，不创建Release。
 
 后续构建`41430691986`已通过资源准备；Windows前端测试揭示Pi路径问题：测试夹具以Unix分隔符识别全局配置导致项目信任默认值被意外清除，另有规则路径断言写死分隔符；同时Git根比较改用系统原生realpath展开Windows短路径，返回原有根路径拼写以保持技能文件／恢复记录的匹配。staging后Pi定向50项：48通过、2项原宿主限定跳过、0失败；新增Git根直接识别和嵌套包归属边界回归。Windows真实短／长路径结果待专用构建验证；其他平台原任务继续，不重复成功安装包。
+
+Windows专项`41431497384`已通过全部Pi测试，验证Git短路径修复；随后仅DSH私有文件可编辑测试失败，原因是隔离HOME未规范化而触发文件别名保护。夹具改为realpath(mkdtemp)，未放宽生产保护；DSH定向38项：8通过、30原宿主限定跳过。仅Windows继续专项验证，macOS／Linux原任务不重跑。
