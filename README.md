@@ -16,41 +16,23 @@
 </p>
 
 <p align="center">
-  <img src="./assets/readme/screenshot.png" width="100%" alt="Skills Space desktop application showing native skill cards, agent navigation, and skill filters.">
+  <img src="./assets/readme/screenshot-en.jpg" width="100%" alt="Skills Space in English, showing managed skills and cross-agent installations.">
 </p>
 
 Skills Space is a desktop application for managing skills across Codex, Claude Code, Pi, Hermes, DeepSeek Harness, and other AI agents. It combines skill discovery, installation, and maintenance across global and project scopes.
 
-Core skill installation, updates, and removal use the original [Vercel skills CLI](https://github.com/vercel-labs/skills), bundled at a pinned version. Agent integrations add native directory, configuration, and invocation controls where supported.
-
 ## Features
 
-### Skill discovery
-
-- Browse the [skills.sh](https://skills.sh) all-time, trending, and hot leaderboards, or search by keyword and source.
-- Read introductions, installation instructions, overviews, and skill documents. View available repository, stars, topics, and installation metrics alongside them.
-- Browse details without cloning a repository. Only installation enters the source inspection and confirmation flow.
-- Choose 12, 24, or 48 skills per page and jump to a specific page. Clearing a search restores your leaderboard.
-
-### Skill installation
-
-Start from a store card, Git repository, local directory, or supported download URL. Preview the available skills, select the ones you want, then choose agents, global or project scope, and the available installation mode before confirming.
-
-### Skill maintenance
-
-| Task | What you can do |
+| Feature | What you can do |
 | --- | --- |
-| Inspect | Filter installed skills, read their documents and versions, and open their locations. |
-| Update | Check for available updates, review local differences where supported, and inspect per-item results. |
-| Remove | Uninstall individual skills or a selected source group, with shared installation impact checked before removal. |
-| Share | Copy or link an existing skill to another supported agent or project through the existing review flow. |
-| Restore | Install skills declared by project dependencies or restore supported entries from a project lockfile. |
+| **Unified management** | Manage CLI-managed and native skills across agents, with global/project scopes, sources, and installation status. |
+| **Skill store** | Browse leaderboards, search skills, and read full documents, installation instructions, and repository details without cloning. |
+| **Installation and sharing** | Install from Git repositories, local directories, or supported download URLs; share skills with selected agents and projects. |
+| **Native skill controls** | Preserve existing directories and control enable/disable, automatic selection, manual invocation, and preloading where supported. |
+| **Updates and maintenance** | Check updates and local differences, review shared removal impact, run batch actions, and install from project dependencies or supported lockfile entries. |
+| **Configuration and extensions** | Manage skill directories, agent settings, DSH presets, Codex plugins, and Pi extension packages. |
 
-### Native skills and packages
-
-Skills Space also reads skills discovered by supported agents outside the CLI-managed collection. These native skills retain their original directories and source-specific operations.
-
-Codex plugins and Pi extension packages have dedicated management flows. Skill controls follow the selected agent's capabilities; they are not applied as universal settings across every agent.
+Installation, updates, and removal use a pinned, unmodified [Vercel skills CLI](https://github.com/vercel-labs/skills), without a separate fork.
 
 ## Agent integrations
 
@@ -96,6 +78,9 @@ For a packaged app, Node is detected automatically. You can select an executable
 
 The app uses **React 19, TypeScript, Vite, Tauri 2, and Rust**. Presentation lives in `src/`; filesystem, process, and native capabilities live in `src-tauri/`.
 
+<details>
+<summary>Checks and build commands</summary>
+
 Run frontend checks and prepare the CLI resources before native tests:
 
 ```bash
@@ -111,6 +96,8 @@ CI=false pnpm tauri build --debug --bundles app
 ```
 
 Resource staging and native tests must run sequentially. See the [development guide](./docs/agents/development.md) for platform setup, isolated test fixtures, verification scope, and packaging details.
+
+</details>
 
 ## Documentation
 
