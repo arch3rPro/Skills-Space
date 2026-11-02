@@ -49,20 +49,9 @@ test('plugin toggles do not inherit installation permissions and missing invento
  assert.deepEqual(remainingCodexPlugins([plugin],1,snapshot),[]);
 });
 
-test('Codex remains enhanced with its rule settings route', async () => {
- const {agentEnhancement,agentSupportGroup}=await import('./upstream.ts');
- assert.equal(agentSupportGroup('codex'),'enhanced');
- assert.equal(agentEnhancement('codex').settings,'codex');
-});
 
-test('plugin search preserves unknown identity and matches names and marketplace IDs', async () => {
- const {visibleCodexPlugins}=await import('./codex.ts');
- const known={id:'demo@local',name:'demo',marketplace:'local',version:null,installed:false,installationKnown:false,enabled:false,components:[],skills:[],sourcePath:'',installedPath:null,canInstall:false,canToggle:false,canUninstall:false,unavailableReason:'unconfirmed',fingerprint:'f'};
- const toggle={...known,id:'demo@git',installed:true,installationKnown:true,canToggle:true};
- assert.deepEqual(visibleCodexPlugins([known,toggle],''),[known,toggle]);
- assert.deepEqual(visibleCodexPlugins([known,toggle],'DEMO'),[known,toggle]);
- assert.deepEqual(visibleCodexPlugins([known,toggle],'local'),[known]);
-});
+
+
 test('rule validation preserves protected resources and removing a path override retains name inheritance', async () => {
  const {codexRuleEditable,codexRuleError,withoutCodexPathRules}=await import('./codex.ts');
  const snapshot:CodexSnapshot={binary:'',version:'',codexHome:'',configPath:'',revision:'r',rules:[],capabilities:{writeConfig:true,nameRules:true},skills:[{name:'system',description:'',state:{...state,origin:'system'}}],plugins:[],warnings:[]};
@@ -230,11 +219,15 @@ test('plugin pages retain independent native state and use local metadata only f
 test('plugin search retains restricted, unintegrated and unknown actions without changing permissions',async()=>{
  const {visibleCodexPlugins,filterCodexPluginCollection,codexPluginRestriction,codexPluginStateLabel}=await import('./codex.ts');
  const base={id:'p@m',name:'Plugin',marketplace:'m',version:null,installed:true,installationKnown:true,enabled:true,components:[],skills:[],sourcePath:'',installedPath:null,canInstall:false,canToggle:false,canUninstall:false,unavailableReason:null,fingerprint:'f'};
- const restricted={...base,id:'restricted',permissions:{install:'notApplicable' as const,toggle:'restricted' as const,uninstall:'restricted' as const,checkUpdates:'notApplicable' as const}};
- const remote={...base,id:'remote',permissions:{...restricted.permissions,toggle:'notIntegrated' as const}};
- const unknown={...base,id:'unknown',permissions:{...restricted.permissions,toggle:'unknown' as const}};
- assert.deepEqual(visibleCodexPlugins([restricted,remote,unknown],''),[restricted,remote,unknown]);
- const available={...remote,installed:false,installPolicy:'AVAILABLE',permissions:{...remote.permissions,install:'notIntegrated' as const}};
+ const restricted={...base,id:'restricted@m',permissions:{install:'notApplicable' as const,toggle:'restricted' as const,uninstall:'restricted' as const,checkUpdates:'notApplicable' as const}};
+ const remote={...base,id:'remote@m',permissions:{...restricted.permissions,toggle:'notIntegrated' as const}};
+ const unknown={...base,id:'unknown@m',installed:false,installationKnown:false,permissions:{...restricted.permissions,toggle:'unknown' as const}};
+ const available={...remote,id:'available@m',installed:false,installPolicy:'AVAILABLE',permissions:{...remote.permissions,install:'notIntegrated' as const}};
+ const rows=[restricted,remote,unknown,available];
+ assert.deepEqual(visibleCodexPlugins(rows,''),rows);
+ assert.deepEqual(visibleCodexPlugins(rows,'PLUGIN'),rows);
+ assert.deepEqual(visibleCodexPlugins(rows,'m'),rows);
+ assert.deepEqual(visibleCodexPlugins(rows,'restricted'),[restricted]);
  assert.deepEqual(filterCodexPluginCollection([available],'available','all'),[available]);
  assert.deepEqual(filterCodexPluginCollection([available],'all','all'),[available]);
  assert.equal(codexPluginRestriction('unrecognized',true),null);

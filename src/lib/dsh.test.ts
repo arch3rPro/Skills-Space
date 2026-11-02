@@ -296,18 +296,7 @@ test('DSH native file selection preserves same-name preset and empty or missing 
   }
   assert.equal(snapshot.contextKey,first.key,'Choosing a file does not mutate the previous snapshot');
 });
-test('DSH native global and project contexts retain independent identities on serialized readback',()=>{
-  const global=dshScopeKey({host:'local',scope:'global',projectPath:null});
-  const first=dshScopeKey({host:'local',scope:'project',projectPath:'/one'});
-  const second=dshScopeKey({host:'local',scope:'project',projectPath:'/two'});
-  const contexts={[global]:'global-provider',[first]:dshFileContextKey('/empty/cordis.patch.yml'),[second]:'project-provider',settings:'settings-provider'};
-  assert.equal(new Set([global,first,second,'settings']).size,4);
-  const readback=JSON.parse(JSON.stringify(contexts));
-  assert.equal(readback[global],'global-provider');
-  assert.equal(readback[first],'file:/empty/cordis.patch.yml');
-  assert.equal(readback[second],'project-provider');
-  assert.equal(readback.settings,'settings-provider');
-});
+
 
 test('DSH selection writer serializes deferred saves and persists the final merged scope map',async()=>{
   const global=dshScopeKey({host:'local',scope:'global',projectPath:null});

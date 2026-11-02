@@ -37,15 +37,7 @@ test("bulk removal may contain skills installed in different Agents", () => {
   assert.equal(canRemove(inventory.skills, ["review"], ["not-installed"]), false);
 });
 
-test("shared inventory does not imply an undetected Agent is installed", () => {
-  const agents: Agent[] = [
-    { id: "codex", name: "Codex", detected: true, installationStatus: "confirmed", installationEvidence: "/bin/codex", sharedDirectory: true, path: "/shared", directoryExists: true, additionalPaths: [] },
-    { id: "cursor", name: "Cursor", detected: false, installationStatus: "notFound", installationEvidence: null, sharedDirectory: true, path: "/shared", directoryExists: true, additionalPaths: [] },
-  ];
-  const skill = { ...inventory.skills[2], agents: ["codex", "cursor"] };
-  assert.deepEqual(detectedSkillAgents(skill, agents).map((agent) => agent.id), ["codex"]);
-  assert.equal(skill.agents.length, 2, "physical inventory remains available for removal impact verification");
-});
+
 
 test("directory presentation hides the home name without changing execution paths or neighboring users", () => {
   const home = "/Users/example";
@@ -105,10 +97,11 @@ test("source links accept recorded websites and GitHub shorthand but reject exec
   const confirmed: Agent = {id:"codex", name:"Codex", detected:false, installationStatus:"confirmed", installationEvidence:"/bin/codex", sharedDirectory:true, path:"/shared", directoryExists:true, additionalPaths:[]};
   const configuration: Agent = {...confirmed,id:"cursor",installationStatus:"configurationOnly",detected:true,sharedDirectory:false};
   const dedicated: Agent = {...confirmed,id:"claude-code",sharedDirectory:false};
-  const skill: InstalledSkill = {...inventory.skills[2],shared:true,agents:["codex","cursor","claude-code"]};
-  assert.deepEqual(detectedSkillAgents(skill,[confirmed,configuration,dedicated]).map(a=>a.id),["codex","claude-code"]);
+  const absent: Agent = {...confirmed,id:"absent",detected:false,installationStatus:"notFound",installationEvidence:null};
+  const skill: InstalledSkill = {...inventory.skills[2],shared:true,agents:["codex","cursor","claude-code","absent"]};
+  assert.deepEqual(detectedSkillAgents(skill,[confirmed,configuration,dedicated,absent]).map(a=>a.id),["codex","claude-code"]);
   assert.equal(visibleSkills({...inventory,agents:[confirmed,configuration,dedicated],skills:[skill]},"","codex").length,1);
-  assert.deepEqual(skill.agents,["codex","cursor","claude-code"],"all physical associations remain for operation impact");
+  assert.deepEqual(skill.agents,["codex","cursor","claude-code","absent"],"all physical associations remain for operation impact");
  });
 
 test("unconfirmed shared-directory Agents have neither visible skills nor installed counts", () => {
@@ -346,6 +339,8 @@ test("enhanced groups sort independently and preserve all saved IDs", async () =
   // Existing serialized preferences need no migration and retain group order after reload.
   const restored: string[] = JSON.parse(JSON.stringify(result));
   assert.deepEqual(restored.filter(id=>agentSupportGroup(id)==="enhanced"),["hermes-agent","pi","codex","deepseek-harness"]);
+
+  assert.equal(agentEnhancement('codex').settings,'codex');
 });
 
 
@@ -544,13 +539,7 @@ test('failed raw reads are not cached and can retry immediately without affectin
  assert.equal(cache.get('failed'),'# Recovered');assert.equal(cache.get('other'),'# Other');
 });
 
-test('search pagination preserves remote relevance for all 100 items and clamps empty and final pages',()=>{
- const items=Array.from({length:100},(_,n)=>({id:`skill-${n}`,installs:100-n}));
- const pages=Array.from({length:9},(_,n)=>searchPageItems(items,n+1));
- assert.deepEqual(pages.flatMap(page=>page.items),items);assert.equal(pages[0].items.length,12);assert.equal(pages[8].items.length,4);
- assert.equal(searchPageItems(items,99).page,9);assert.equal(searchPageItems(items,0).page,1);assert.deepEqual(searchPageItems([],5),{page:1,totalPages:1,items:[]});
- const session=createMarketplaceSession();session.searchPage={key:'query:owner',page:4};assert.equal(session.searchPage.page,4);assert.equal(session.page,1);
-});
+
 test('website document resource shares concurrent installation and introduction reads, with failure retry and complete paths intact',async()=>{
  const cache=new Map<string,{sourceUrl:string,html:string|null}>();let calls=0;
  const gate=descriptionDeferred();

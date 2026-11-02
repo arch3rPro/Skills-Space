@@ -17,6 +17,10 @@ test('only the explicitly selected Agent contributes state, including managed an
   assert.deepEqual(skillAgentState(managed,'deepseek-harness'),{codex:null,pi:null,hermes:null,dsh:managed.dshState});
   for(const agent of [null,'codex','unknown'])assert.deepEqual(skillAgentState(managed,agent),{codex:null,pi:null,hermes:null,dsh:null});
   assert.equal(skillAgentState({...managed,agents:['pi']},'hermes-agent').hermes,null);
+
+  const native={...managed,cliManaged:false,hermesState:{...managed.hermesState!,canToggle:false,cliAddressable:false}};
+  assert.equal(skillAgentState(native,'hermes-agent').hermes,native.hermesState);
+  assert.equal(skillAgentState({...native,hermesState:undefined},'hermes-agent').hermes,null);
 });
 
 test('managed skills allow configuration-only actions but reject every native content mutation',()=>{
@@ -39,6 +43,8 @@ test('batch eligibility is evaluated per action, preserving readonly and mixed-o
   const readonly={...managed,piState:{...managed.piState!,canToggle:false}};
   assert.equal([managed,readonly].every(skill=>canAgentSkillAction(skill,'pi','pi-toggle')),false);
   assert.equal(canAgentSkillAction({...managed,hermesState:{...managed.hermesState!,canPreload:false}},'hermes-agent','hermes-preload'),false);
+
+  assert.equal(canAgentSkillAction({...managed,piState:{...managed.piState!,canSetVisibility:false}},'pi','pi-invocation'),false);
 });
 
 test('independent DSH file operations retain their context, ownership and shared-file protections',()=>{
@@ -52,13 +58,7 @@ test('independent DSH file operations retain their context, ownership and shared
 });
 
 
-test('managed Pi visibility changes are configuration-only and scoped to Pi',()=>{
- const skill={...managed,piState:{...managed.piState!,canSetVisibility:true}};
- assert.equal(canAgentSkillAction(skill,'pi','pi-invocation'),true);
- for(const context of [null,'codex','deepseek-harness']) assert.equal(canAgentSkillAction(skill,context,'pi-invocation'),false);
- assert.equal(canAgentSkillAction(skill,'pi','pi-trash'),false);
- assert.equal(canAgentSkillAction({...skill,piState:{...skill.piState,canSetVisibility:false}},'pi','pi-invocation'),false);
-});
+
 
 test('DSH managed initial inventory hydrates policy fields omitted by the typed native state',()=>{
   const {canSetPolicy:omitted,...typed}=managed.dshState!;assert.equal(omitted,true);

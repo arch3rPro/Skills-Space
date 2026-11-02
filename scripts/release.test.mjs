@@ -60,12 +60,17 @@ test('missing platform cannot become a complete release',t=>{
   assert.throws(()=>prepare(f.downloaded,f.releases,f.root,env));
   assert.equal(existsSync(join(f.root,'release-output')),false);
 });
-for (const [name,edit] of [['commit',v=>v.sha='b'.repeat(40)],['run',v=>v.runId='124'],['version',v=>v.version='0.1.1'],['platform',v=>v.platform='linux-x64']]) {
-  test(`mixed ${name} provenance is rejected`,t=>{
-    const f=fixture(t);buildAll(f);mutateManifest(f,'macos-arm64',edit);
-    assert.throws(()=>prepare(f.downloaded,f.releases,f.root,env),/same selected build and version/);
-  });
-}
+test('mixed commit, run, version and platform provenance is rejected before output',t=>{
+  const f=fixture(t);buildAll(f);
+  const manifest=join(f.downloaded,'installers-macos-arm64','build.json');
+  const original=readFileSync(manifest,'utf8');
+  for (const [name,edit] of [['commit',v=>v.sha='b'.repeat(40)],['run',v=>v.runId='124'],['version',v=>v.version='0.1.1'],['platform',v=>v.platform='linux-x64']]) {
+    writeFileSync(manifest,original);
+    mutateManifest(f,'macos-arm64',edit);
+    assert.throws(()=>prepare(f.downloaded,f.releases,f.root,env),/same selected build and version/,name);
+    assert.equal(existsSync(join(f.root,'release-output')),false,name);
+  }
+});
 test('tampered installer bytes and incomplete platform formats are rejected',t=>{
   const f=fixture(t);buildAll(f);
   const binary=join(f.downloaded,'installers-windows-x64/Skills-Space_0.1.0_windows-x64.exe');

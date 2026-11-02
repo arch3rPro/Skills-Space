@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {skillAgentState} from './agent-skill-actions.ts';
 import {hermesCardNotice,hermesInspectionWarnings,filterHermesSkills,hermesActionSkills,hermesSelection} from './hermes.ts';
 
 test('cards retain actionable blockers without routine runtime-verification notices',()=>{
@@ -16,16 +15,7 @@ test('inspection issues retain localized causes and paths without exposing unkno
 });
 
 
-test('Hermes state stays in the current Agent context regardless of installation ownership',()=>{
- const state={path:'/shared/demo',file:'/shared/demo/SKILL.md',name:'demo',description:'fixture',origin:'local',inScope:true,enabled:false,autoLoad:false,canToggle:false,canPreload:false,reason:'untrusted',loadName:null,documentRevision:'revision',cliAddressable:true};
- const managed={path:state.path,name:state.name,description:state.description,agents:['hermes-agent'],source:null,sourceUrl:null,cliManaged:true,hermesState:state};
- assert.equal(skillAgentState(managed,'hermes-agent').hermes,state);
- assert.equal(skillAgentState(managed,'pi').hermes,null);
- assert.equal(skillAgentState({...managed,cliManaged:false},'hermes-agent').hermes,state);
- const native={...managed,cliManaged:false,hermesOrigin:'external' as const,hermesState:{...state,cliAddressable:false}};
- assert.equal(skillAgentState(native,'hermes-agent').hermes,native.hermesState);
- assert.equal(skillAgentState({...native,hermesState:undefined},'hermes-agent').hermes,null);
-});
+
 
 test('load filters exclude disabled skills even when preload remains configured',()=>{
  const base={path:'/demo',file:'/demo/SKILL.md',name:'demo',description:'fixture',origin:'local',inScope:true,enabled:true,autoLoad:false,canToggle:true,canPreload:true,reason:null,loadName:'demo',documentRevision:'revision',cliAddressable:true};

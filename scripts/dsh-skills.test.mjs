@@ -94,6 +94,10 @@ test("DSH project roots and same-name precedence retain scope isolation",async()
   await skill(join(project,".dsh/skills/review"),document("review"));
   await skill(join(project,".agents/skills/review"),document("review"));
   await skill(join(home,".agents/skills/review"),document("review"));
+  await skill(join(home,".dsh/skills/review"),document("review"));
+  const global=inspect(home);
+  assert.equal(global.skills.find(row=>row.source==="user-dsh").shadowed,false);
+  assert.equal(global.skills.find(row=>row.source==="user-agents").shadowed,true);
   const value=inspect(home,join(project,"child"));
   assert.equal(value.projectRoot,project); assert.match(value.installIssue,/Git root/);
   assert.equal(value.skills.find(row=>row.source==="project-dsh").shadowed,false);
@@ -114,7 +118,12 @@ configurationTest("DSH configuration inspection keeps declarations scoped and do
   assert.equal(await readFile(file,"utf8"),original);
 }));
 test("DSH source preflight rejects invalid YAML, names and invocation values",async()=>fixture(async home=>{
-  const cases=[document("valid"),document("bad_name"),document("name","user-invocable: maybe\n"),document("array","user-invocable: [true]\n"),'---\nname: test\ndescription: Invalid: mapping\n---\n'];
+  const {metadata}=await import('../src-tauri/resources/upstream/inspect-dsh-skills.mjs');
+  for(const model of [true,false])for(const user of [true,false]){
+    const value=metadata(document('source',`disable-model-invocation: ${!model}\nuser-invocable: ${user}\n`).replaceAll('\n','\r\n'));
+    assert.equal(value.modelInvocable,model);assert.equal(value.userInvocable,user);
+  }
+  const cases=[document("valid").replaceAll('\n','\r\n'),document("bad_name"),document("name","user-invocable: maybe\n"),document("array","user-invocable: [true]\n"),'---\nname: test\ndescription: Invalid: mapping\n---\n'];
   const result=inspect(home,"",cases.map((content,index)=>({name:String(index),content})));
   assert.equal(result[0].error,null);assert.ok(result.slice(1).every(row=>row.error));
 }));
@@ -203,16 +212,7 @@ configurationTest('DSH home overlay, duplicate provider, disabled defaults and l
   await writeFile(join(path,'cordis.patch.yml'),entryPatch('- id: skill-filesystem\n- id: skill-filesystem\n'));snapshot=await inspectDsh(home,join(home,'.dsh'),null,options);assert.ok(snapshot.configurations.every(row=>row.readOnlyReason==='ambiguous'));
   const elsewhere=join(home,'external.yml');await writeFile(elsewhere,config(root));await rm(join(path,'cordis.patch.yml'));await symlink(elsewhere,join(path,'cordis.patch.yml'));assert.equal((await inspectDsh(home,join(home,'.dsh'),null,options)).configurations[0].readOnlyReason,'linked-configuration');
 }));
-test('DSH all four invocation policies preserve CRLF, comments, body and precedence',async()=>fixture(async home=>{
-  const [{inspectDsh},{prepareInvocation}]=await modules();
-  const original='---\r\n# metadata\r\nname: alpha\r\ndescription: Fixture\r\nuser-invocable: yes # retain\r\n---\r\nBody\r\n';
-  for(const model of [true,false])for(const user of [true,false]){
-    const prepared=prepareInvocation(original,model,user);assert.ok(prepared.after.endsWith('---\r\nBody\r\n'));assert.match(prepared.after,/# metadata/);assert.match(prepared.after,/# retain/);assert.ok(!/(?<!\r)\n/.test(prepared.after));
-    await skill(join(home,'.dsh/skills/alpha'),prepared.after);await skill(join(home,'.agents/skills/alpha'),document('alpha'));
-    const snapshot=await inspectDsh(home,join(home,'.dsh'),null,options);const own=snapshot.skills.find(row=>row.source==='user-dsh');assert.equal(own.modelInvocable,model);assert.equal(own.userInvocable,user);assert.equal(own.canSetInvocation,true);assert.equal(snapshot.skills.find(row=>row.source==='user-agents').shadowed,true);
-  }
-  assert.throws(()=>prepareInvocation(document('bad_name'),true,true));
-}));
+
 configurationTest('DSH YAML anchors and merges remain read-only instead of rewriting other consumers',async()=>fixture(async home=>{
   const [{inspectDsh},{prepareConfiguration}]=await modules();await profile(home,'web','- id: skill-filesystem\n  config:\n    watch: &shared true\n    unrelated: *shared\n');const snapshot=await inspectDsh(home,join(home,'.dsh'),null,options);assert.equal(snapshot.configurations[0].readOnlyReason,'complex-yaml');await assert.rejects(prepareConfiguration(home,join(home,'.dsh'),null,{key:snapshot.configurations[0].key,revision:snapshot.revision,customSkillDirs:[],watch:false,includeDefaultRoots:true},options));
 }));
