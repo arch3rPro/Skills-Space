@@ -43,3 +43,12 @@ Initial infrastructure verification: 13 isolated artifact/version/notes tests pa
 
 
 The subsequent whole-suite rationalization reviewed every existing test file, retained independent risks and reduced direct definitions from 664 to 637. The final local full library run passed 263 checks with 39 opt-in checks ignored; frontend contracts passed 259 with 32 skipped, and release infrastructure passed all 10 scenarios. The current critical selectors contain 81 Unix checks and a theoretical 78 on Windows, validated against actual compiled names without repeating execution. Windows execution remains pending. See [the complete removal and timing record](../research/test-suite-rationalization-2026-11-03.md); earlier counts above remain historical evidence. No new cloud build or release was triggered for this work.
+
+
+## Latest installer verification (2026-11-03)
+
+The authorized all-platform run [41540983932](https://github.com/arch3rPro/Skills-Space/actions/runs/41540983932) produced successful macOS arm64/x64 and Linux installers from `9f7992d`; its Windows job passed 77 critical checks and failed one remaining source-path matching case. The scoped fix `a9d8144` passed the existing 12 local-sync checks, and the Windows-only run [41543335879](https://github.com/arch3rPro/Skills-Space/actions/runs/41543335879) passed all 78 critical checks and uploaded its installer. Each successful Unix target passed 81 critical checks. Successful targets were not rebuilt. All four artifact sets exist and are unexpired; no release was prepared or published. Target-system installation/startup remains untested.
+
+These are validation artifacts from two source commits, not a same-commit release input. Keep the existing provenance checks when preparing a future release. The original Linux disconnection cause remains unknown; this Linux run completed successfully.
+
+`59c484b` subsequently removed Cargo reinvocation from the CI execution step after the Intel log showed a 97-second test recompilation. Sixteen simulated entry cases and actual compiled-binary list metadata passed locally; no installer build was added for that CI-only change. Its execution on the hosted runners and timing benefit remain to be observed on the next explicitly requested build.
