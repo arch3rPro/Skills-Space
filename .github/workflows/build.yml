@@ -1,0 +1,85 @@
+name: Build installers (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: all
+        options: [all, macos-arm64, macos-x64, windows-x64, linux-x64]
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.20.0
+      - name: Release infrastructure tests
+        run: node --test scripts/release.test.mjs
+      - id: matrix
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: node scripts/release.mjs matrix "$PLATFORM" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: select
+    name: ${{ matrix.id }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: 'false'
+      CARGO_TERM_COLOR: always
+      DISABLE_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.20.0
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.id }}
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      - run: pnpm install --frozen-lockfile
+      - name: Check versions
+        run: node scripts/release.mjs version
+      - name: Frontend contract tests
+        run: pnpm test:frontend-contracts
+      - name: Stage resources for native tests
+        run: pnpm stage:upstream
+      - name: Native tests (before packaging)
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target "${{ matrix.target }}" --lib -- --test-threads=1
+      - name: Build installers (includes resource staging and frontend compilation)
+        env:
+          APPLE_SIGNING_IDENTITY: '-'
+        run: pnpm tauri build --target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}" -- --locked
+      - name: Collect installers and provenance
+        run: node scripts/release.mjs collect "${{ matrix.id }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.id }}
+          path: release-artifacts/${{ matrix.id }}/
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true

@@ -10,6 +10,7 @@
 | [AGENTS](../AGENTS.md) | 当前项目约束、质量要求、视觉保留与条件式阅读入口 |
 | [CLAUDE](../CLAUDE.md) | 当前普通开发流程；按任务规模执行，不默认启动重型方法 |
 | [CONTEXT](../CONTEXT.md) | 当前领域术语表及语义边界；不代替开发规范、产品需求或功能验收记录 |
+| [发布指南](agents/release.md) | 手动构建、失败任务重跑、产物复用、版本说明和草稿发布流程 |
 | [开发指南](agents/development.md) | 当前运行入口、历史代码边界与验证方式 |
 | [UI 设计基线](design/ui-system.md) | UI 实现／审查前必读；tweakcn 主题、shadcn 组件清单、简约设计语言、信息层级与一致性验收的权威入口 |
 | [Codex 设计基线推广](specs/0011-codex-inspired-design-baseline.md) | 已确认样板的全项目推广范围、实现归属及实际验证状态 |

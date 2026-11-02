@@ -67,3 +67,12 @@ docs/archive/*
 *.key
 *.p12
 *.pfx
+
+# Local release assembly outputs.
+/release-artifacts/
+/release-output/
+/downloaded/
+
+# Reviewed release notes are publication inputs.
+!docs/releases/
+!docs/releases/*.md
