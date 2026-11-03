@@ -102,7 +102,7 @@ const websiteHelperOutput=resolve('.scratch/skill-document-check/website-helpers
 await build({entryPoints:['src/components/skill-markdown.tsx'],outfile:websiteOutput,bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
 await build({entryPoints:['src/lib/website-document.ts'],outfile:websiteHelperOutput,bundle:true,platform:'node',format:'esm',packages:'external',logLevel:'silent'});
 const {SkillHtml}=await import(pathToFileURL(websiteOutput).href);
-const {websiteIntroduction,websiteDocumentUrl}=await import(pathToFileURL(websiteHelperOutput).href);
+const {websiteIntroduction,websiteDocumentUrl,applicationReleaseSummary}=await import(pathToFileURL(websiteHelperOutput).href);
 
 // Minimal DOM-node fixture for the React projection. Browser template parsing is
 // separately observed in the actual App; these tests never insert active DOM.
@@ -110,6 +110,8 @@ class WebsiteElementFixture {
  constructor(tag,attributes={},children=[]) {this.nodeType=1;this.tagName=tag.toUpperCase();this.attributes=attributes;this.childNodes=children;}
  get children(){return this.childNodes.filter(node=>node instanceof WebsiteElementFixture);}
  get textContent(){return this.childNodes.map(node=>node.textContent??'').join('');}
+ get outerHTML(){const tag=this.tagName.toLowerCase();return `<${tag}>${this.childNodes.map(node=>node.outerHTML??node.textContent).join('')}</${tag}>`;}
+ querySelector(tag){return this.children.find(node=>node.tagName===tag.toUpperCase())??this.children.map(node=>node.querySelector(tag)).find(Boolean)??null;}
  getAttribute(name){return Object.hasOwn(this.attributes,name)?this.attributes[name]:null;}
  hasAttribute(name){return Object.hasOwn(this.attributes,name);}
 }
@@ -126,6 +128,8 @@ const renderWebsite=nodes=>withWebsiteFixture(nodes,()=>renderToStaticMarkup(cre
 test('website resources resolve only trusted origin-root paths while installed Markdown retains stricter URL rules',()=>{
  assert.equal(websiteDocumentUrl('/api/image-proxy?url=https%3A%2F%2Fexample.com%2Fimage.png'),'https://www.skills.sh/api/image-proxy?url=https%3A%2F%2Fexample.com%2Fimage.png');
  assert.equal(websiteDocumentUrl('/docs#guide'),'https://www.skills.sh/docs#guide');
+ assert.equal(websiteDocumentUrl('/arch3rPro/Skills-Space/releases/tag/v0.1.0','https://github.com/'),'https://github.com/arch3rPro/Skills-Space/releases/tag/v0.1.0');
+ assert.equal(websiteDocumentUrl('/\\evil.test/file','https://github.com/'),undefined);
  assert.equal(websiteDocumentUrl('https://example.com/image.png'),'https://example.com/image.png');
  for(const value of ['//evil.test/image.png','/\\evil.test/image.png','javascript:alert(1)','data:image/svg+xml,evil','file:///etc/passwd','https://user:secret@example.com/file','./unknown.png'])assert.equal(websiteDocumentUrl(value),undefined,value);
 });
@@ -146,6 +150,21 @@ test('website introduction uses at most two original opening paragraphs and stop
  const nodes=[e('h1',{},'Guide'),e('p',{},'First ',e('strong',{},'original'),' paragraph.'),e('p',{},'Second\n  original paragraph.'),e('h2',{},'Other section'),e('p',{},'Not the introduction')];
  assert.equal(withWebsiteFixture(nodes,()=>websiteIntroduction('synthetic website document')),'First original paragraph. Second original paragraph.');
  assert.equal(withWebsiteFixture([e('h2',{},'Details'),e('p',{},'Actual opening paragraph')],()=>websiteIntroduction('synthetic website document')),'Actual opening paragraph');
+});
+
+
+test('application notes keep feature lists and omit release logistics and first-release placeholder prose',()=>{
+ const e=websiteElement;
+ const nodes=[e('h1',{},'Skills Space 0.1.0'),e('p',{},'独立仓库首次发布'),
+  e('h2',{},'新增功能'),e('ul',{},e('li',{},'跨 Agent 技能管理'),e('li',{},e('strong',{},'技能商店'),'与安装')),
+  e('h2',{},'功能优化'),e('p',{},'首次发布，无上一正式版本'),
+  e('h2',{},'Bug 修复'),e('p',{},'首次发布，不列内部修复'),
+  e('h2',{},'下载'),e('ul',{},e('li',{},'macOS installer')),e('h2',{},'构建来源'),e('ol',{},e('li',{},'build commit'))];
+ const summary=withWebsiteFixture(nodes,()=>applicationReleaseSummary('synthetic website document'));
+ assert.equal(summary,'<h2>新增功能</h2><ul><li>跨 Agent 技能管理</li><li><strong>技能商店</strong>与安装</li></ul>');
+ const updates=[e('h2',{},'功能优化'),e('ol',{},e('li',{},'加快列表加载')),e('h2',{},'Bug 修复'),e('ul',{},e('li',{},'修复目录隔离'))];
+ assert.equal(withWebsiteFixture(updates,()=>applicationReleaseSummary('synthetic website document')),'<h2>功能优化</h2><ol><li>加快列表加载</li></ol><h2>Bug 修复</h2><ul><li>修复目录隔离</li></ul>');
+ assert.equal(withWebsiteFixture([e('h2',{},'下载'),e('ul',{},e('li',{},'installer'))],()=>applicationReleaseSummary('synthetic website document')),'');
 });
 
 const cardOutput=resolve('.scratch/skill-document-check/inventory-card.mjs');

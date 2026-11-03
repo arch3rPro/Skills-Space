@@ -20,6 +20,7 @@ pub fn run() {
             upstream::node_runtime::application_node_select,
             versions::application_versions,
             versions::application_check_versions,
+            versions::application_release_notes,
             marketplace::fetch_skill_leaderboard,
             marketplace::fetch_skill_document,
             marketplace::fetch_skill_markdown,

@@ -50,7 +50,7 @@ const unix = [
 ];
 export const criticalTests = (platform = process.platform) => [...common, ...(platform === 'win32' ? [] : unix)];
 
-const fastModules = ['preferences::', 'marketplace::'];
+const fastModules = ['preferences::', 'marketplace::', 'versions::'];
 export function selectCritical(available, ignored, platform = process.platform) {
   const required = criticalTests(platform);
   const missing = required.filter(name => !available.has(name));

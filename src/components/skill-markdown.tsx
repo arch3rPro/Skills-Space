@@ -66,7 +66,7 @@ export function SkillMarkdown({ content, zh, onOpenExternal }: { content: string
 }
 
 /** Render the site's complete document with shared typography and code blocks, without its scripts, styles or event attributes. */
-export function SkillHtml({ html, zh, onOpenExternal }: { html: string; zh: boolean; onOpenExternal: (url: string) => void }) {
+export function SkillHtml({ html, zh, onOpenExternal, origin }: { html: string; zh: boolean; onOpenExternal: (url: string) => void; origin?: string }) {
   const prefix = useId();
   const rendered = useMemo(() => {
     const fragment = websiteDocumentFragment(html);
@@ -84,9 +84,9 @@ export function SkillHtml({ html, zh, onOpenExternal }: { html: string; zh: bool
         const language = code.getAttribute('class')?.split(/\s+/).find(value => value.startsWith('language-'))?.slice(9);
         return <SkillCodeBlock key={key} code={code.textContent ?? ''} language={language} />;
       }
-      if (tag === 'a') return <WebsiteLink key={key} href={node.getAttribute('href') ?? undefined}>{children}</WebsiteLink>;
+      if (tag === 'a') return <WebsiteLink key={key} origin={origin} href={node.getAttribute('href') ?? undefined}>{children}</WebsiteLink>;
       if (tag === 'img') {
-        const src = websiteDocumentUrl(node.getAttribute('src') ?? undefined);
+        const src = websiteDocumentUrl(node.getAttribute('src') ?? undefined, origin);
         return src ? <img key={key} src={src} alt={node.getAttribute('alt') ?? ''} loading="lazy" referrerPolicy="no-referrer" /> : node.getAttribute('alt');
       }
       if (tag === 'table') return <div key={key} className="skill-markdown-table" tabIndex={0} role="region" aria-label={zh ? '表格' : 'Table'}><table>{children}</table></div>;
@@ -103,10 +103,10 @@ export function SkillHtml({ html, zh, onOpenExternal }: { html: string; zh: bool
       return createElement(tag, { key }, children);
     };
     return Array.from(fragment.childNodes).map((node, index) => render(node, String(index)));
-  }, [html, prefix, zh]);
+  }, [html, prefix, zh, origin]);
   return <DocumentContext.Provider value={{ zh, onOpenExternal }}><article className="skill-markdown">{rendered}</article></DocumentContext.Provider>;
 }
-function WebsiteLink({ href, children }: { href?: string; children: ReactNode }) {
+function WebsiteLink({ href, children, origin }: { href?: string; children: ReactNode; origin?: string }) {
   const { onOpenExternal } = useContext(DocumentContext);
   if (href?.startsWith('#')) return <a href={href} onClick={event => {
     event.preventDefault();
@@ -116,6 +116,6 @@ function WebsiteLink({ href, children }: { href?: string; children: ReactNode })
     const heading = Array.from(article?.querySelectorAll<HTMLElement>('[data-markdown-anchor]') ?? []).find(item => item.dataset.markdownAnchor === slug);
     heading?.scrollIntoView({ block: 'start' }); heading?.focus({ preventScroll: true });
   }}>{children}</a>;
-  const url = websiteDocumentUrl(href);
+  const url = websiteDocumentUrl(href, origin);
   return url ? <a href={url} onClick={event => { event.preventDefault(); onOpenExternal(url); }}>{children}</a> : <span>{children}</span>;
 }
