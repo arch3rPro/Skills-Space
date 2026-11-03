@@ -698,3 +698,8 @@ Windows实际运行、Linux执行器失联原因及目标系统安装／启动�
 
 
 发布入口独立审查完成：补齐多来源模式对发布记录SHA的统一校验，缺失/非法SHA在输出前拒绝；12项发布检查通过（约303毫秒）。模拟gh resolve→download覆盖失败base的成功任务、Windows覆盖、2次run读取/4个精确下载目录、非祖先拒绝；真实GH元数据resolve验证成功。版本0.1.0、JS语法、YAML及diff检查通过；actionlint未安装。没有运行前端/Rust/App或安装包构建。准备提交并只触发草稿工作流，正式发布仍未授权。
+
+
+v0.1.0草稿已生成：[Release草稿](https://github.com/arch3rPro/Skills-Space/releases/tag/untagged-62b410644e265fcf1b2f)，[准备任务41563992204](https://github.com/arch3rPro/Skills-Space/actions/runs/41563992204)成功。发布记录提交592e43d，保留Mac/Linux的9f7992d和Windows的a9d8144。5个原安装包+SHA256SUMS.txt+BUILD_SOURCES.json共7附件齐全；只下载2个元数据文件，逐一核对GitHub上传摘要、5份安装包校验和、4个平台原manifest来源及发布记录提交，全部匹配。API确认isDraft=true、publishedAt=null；没有重新构建安装包或正式发布。
+
+首次草稿dispatch在解析阶段因job级env不支持runner.temp被422拒绝，没有创建执行任务；改为工作区相对.release-build-sources.json后成功执行。独立静态复核三个命令工作目录一致、临时文件不随附件上传、其余表达式作用域正确；复用原12项脚本检查，没有重新跑测试或安装包构建。
