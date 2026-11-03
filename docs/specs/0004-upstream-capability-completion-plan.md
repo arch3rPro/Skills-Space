@@ -703,3 +703,8 @@ Windows实际运行、Linux执行器失联原因及目标系统安装／启动�
 v0.1.0草稿已生成：[Release草稿](https://github.com/arch3rPro/Skills-Space/releases/tag/untagged-62b410644e265fcf1b2f)，[准备任务41563992204](https://github.com/arch3rPro/Skills-Space/actions/runs/41563992204)成功。发布记录提交592e43d，保留Mac/Linux的9f7992d和Windows的a9d8144。5个原安装包+SHA256SUMS.txt+BUILD_SOURCES.json共7附件齐全；只下载2个元数据文件，逐一核对GitHub上传摘要、5份安装包校验和、4个平台原manifest来源及发布记录提交，全部匹配。API确认isDraft=true、publishedAt=null；没有重新构建安装包或正式发布。
 
 首次草稿dispatch在解析阶段因job级env不支持runner.temp被422拒绝，没有创建执行任务；改为工作区相对.release-build-sources.json后成功执行。独立静态复核三个命令工作目录一致、临时文件不随附件上传、其余表达式作用域正确；复用原12项脚本检查，没有重新跑测试或安装包构建。
+
+
+#### v0.1.0 正式发布（2026-11-03）
+
+用户明确授权“发布”后，已将验证完成的草稿发布为最新正式版本：[v0.1.0](https://github.com/arch3rPro/Skills-Space/releases/tag/v0.1.0)。发布时间北京时间2026-11-03 10:12:05；API确认isDraft=false、isPrerelease=false。五个安装包、SHA256SUMS.txt和BUILD_SOURCES.json共七个附件保留，发布说明和各平台真实构建来源不变。没有重新编译、触发构建或改写已上传安装包。

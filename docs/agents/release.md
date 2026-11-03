@@ -1,5 +1,7 @@
 # Release workflow
 
+Latest stable release: [v0.1.0](https://github.com/arch3rPro/Skills-Space/releases/tag/v0.1.0), published with explicit user approval on 2026-11-03. All five installers and both metadata assets are attached; publication reused the verified draft without rebuilding. Historical preparation records below retain their original status.
+
 ## Authorization and triggers
 
 Both workflows use only `workflow_dispatch`. Pushes, pull requests, tags and release events do not trigger builds. Do not dispatch a build, create a tag, prepare a draft or publish without the user's instruction for that action. Committing workflow files does not authorize execution.
