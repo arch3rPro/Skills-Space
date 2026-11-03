@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {collect, prepare, platforms, version} from './release.mjs';
+import {buildSources, collect, prepare, platforms, version} from './release.mjs';
 
 const source=fileURLToPath(new URL('..', import.meta.url));
 const sha='a'.repeat(40);
@@ -112,4 +112,35 @@ test('manual platform selection returns only the requested job and rejects unkno
   const value=JSON.parse(out.trim().slice('value='.length));
   assert.deepEqual(value.include.map(p=>p.id),['windows-x64']);
   assert.throws(()=>execFileSync(process.execPath,[script,'matrix','unknown'],{stdio:'pipe'}));
+});
+
+
+test('platform selection reuses successful jobs from a failed run and validates every override',()=>{
+  const run={headSha:sha,status:'completed',event:'workflow_dispatch',workflowName:'Build installers (manual)',jobs:platforms.map(p=>({name:p.id,status:'completed',conclusion:p.id==='windows-x64'?'failure':'success'}))};
+  const repaired={...run,headSha:'b'.repeat(40),jobs:[{name:'windows-x64',status:'completed',conclusion:'success'}]};
+  const calls=[];const load=id=>{calls.push(id);return id==='123'?run:repaired;};
+  const selected=buildSources('123',{'windows-x64':'124'},load);
+  assert.deepEqual(calls,['123','124']);assert.deepEqual(selected['windows-x64'],{sha:repaired.headSha,runId:'124'});
+  assert.equal(selected['linux-x64'].sha,sha);
+  assert.throws(()=>buildSources('123',{},load),/did not succeed/);
+  assert.throws(()=>buildSources('123',{unknown:'124'},load),/Unknown platform/);
+  assert.throws(()=>buildSources('123',{'windows-x64':'not-a-run'},load),/Invalid platform/);
+  for(const bad of [{...repaired,status:'in_progress'},{...repaired,event:'push'},{...repaired,workflowName:'Other'},{...repaired,headSha:'unknown'}])assert.throws(()=>buildSources('124',{},()=>bad),/completed manual/);
+});
+
+test('explicit per-platform sources preserve provenance and still reject mismatched artifacts',t=>{
+  const f=fixture(t);buildAll(f);const windows={sha:'b'.repeat(40),runId:'124'};
+  mutateManifest(f,'windows-x64',value=>Object.assign(value,windows));
+  const file=join(f.root,'sources.json');writeFileSync(file,JSON.stringify(Object.fromEntries(platforms.map(p=>[p.id,p.id==='windows-x64'?windows:{sha,runId:'123'}]))));
+  const selected={...env,BUILD_SOURCES_FILE:file};
+  for (const BUILD_SHA of [undefined,'not-a-commit']) {
+    assert.throws(()=>prepare(f.downloaded,f.releases,f.root,{...selected,BUILD_SHA}),/valid release-record commit/);
+    assert.equal(existsSync(join(f.root,'release-output')),false);
+  }
+  prepare(f.downloaded,f.releases,f.root,selected);
+  const record=JSON.parse(readFileSync(join(f.root,'release-output/assets/BUILD_SOURCES.json'),'utf8'));
+  assert.equal(record.platforms['windows-x64'].sha,windows.sha);assert.equal(record.platforms['linux-x64'].sha,sha);
+  assert.match(readFileSync(join(f.root,'release-output/RELEASE_NOTES.md'),'utf8'),/actions\/runs\/124/);
+  mutateManifest(f,'windows-x64',value=>value.runId='125');
+  assert.throws(()=>prepare(f.downloaded,f.releases,f.root,selected),/same selected build/);
 });

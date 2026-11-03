@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: Successful Build installers run ID (all four platforms)
+        description: Base installer build run ID
         required: true
         type: string
+      platform_runs:
+        description: 'Optional platform run overrides as JSON, e.g. {"windows-x64":"123"}'
+        type: string
+        default: '{}'
 
 permissions:
   actions: read
@@ -24,33 +28,23 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      PLATFORM_RUNS: ${{ inputs.platform_runs }}
+      BUILD_SHA: ${{ github.sha }}
+      BUILD_SOURCES_FILE: ${{ runner.temp }}/build-sources.json
     steps:
-      - name: Resolve successful source build
-        id: source
-        shell: bash
-        run: |
-          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Invalid build run ID'; exit 1; }
-          gh run view "$BUILD_RUN_ID" --json headSha,status,conclusion,event,workflowName > /tmp/build-run.json
-          node --input-type=module <<'JS' >> "$GITHUB_OUTPUT"
-          import {readFileSync} from 'node:fs';
-          const run = JSON.parse(readFileSync('/tmp/build-run.json','utf8'));
-          if (run.status !== 'completed' || run.conclusion !== 'success' || run.event !== 'workflow_dispatch' || run.workflowName !== 'Build installers (manual)') throw new Error('Select a successful manual installer build.');
-          console.log(`sha=${run.headSha}`);
-          JS
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.source.outputs.sha }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.20.0
+      - name: Resolve successful platform builds
+        run: node scripts/release.mjs resolve-builds "$BUILD_RUN_ID" "$PLATFORM_RUNS" "$BUILD_SOURCES_FILE"
       - name: Download existing installers (no rebuild)
-        run: gh run download "$BUILD_RUN_ID" --pattern 'installers-*' --dir downloaded
+        run: node scripts/release.mjs download-builds "$BUILD_SOURCES_FILE" downloaded
       - name: Read previous releases
         run: gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" > /tmp/releases.json
       - name: Validate installers and release notes
-        env:
-          BUILD_SHA: ${{ steps.source.outputs.sha }}
         run: node scripts/release.mjs prepare downloaded /tmp/releases.json
       - name: Create or update draft only
         shell: bash
@@ -64,8 +58,8 @@ jobs:
           if (release && !release.draft) throw new Error('This version is already published; increment the version.');
           JS
           if gh release view "$tag" > /dev/null 2>&1; then
-            gh release edit "$tag" --draft --target "${{ steps.source.outputs.sha }}" --notes-file release-output/RELEASE_NOTES.md
+            gh release edit "$tag" --draft --target "$BUILD_SHA" --notes-file release-output/RELEASE_NOTES.md
             gh release upload "$tag" release-output/assets/* --clobber
           else
-            gh release create "$tag" release-output/assets/* --draft --target "${{ steps.source.outputs.sha }}" --title "Skills Space $version" --notes-file release-output/RELEASE_NOTES.md
+            gh release create "$tag" release-output/assets/* --draft --target "$BUILD_SHA" --title "Skills Space $version" --notes-file release-output/RELEASE_NOTES.md
           fi
