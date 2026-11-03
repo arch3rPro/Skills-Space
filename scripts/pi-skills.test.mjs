@@ -132,7 +132,8 @@ test('contradictory native preferences in global and project scopes require an e
  assert.equal(state.managed,false);assert.equal(state.lifecycle.recovery,'conflict');assert.equal(state.canSetVisibility,true);assert.deepEqual(readFileSync(file),original);
 });
 
-test('Pi menu capabilities respect source ownership, qualified runtime and unknown external defaults',t=>{
+test('Pi menu capabilities respect source ownership, qualified runtime and unknown external defaults',async t=>{
+ const {originalRuntime}=await import('../src-tauri/resources/upstream/pi-package-driver.mjs');
  const f=fixture(t),local=skill(join(f.agent,'local-package/skills'),'local');
  const npmRoot=join(f.agent,'npm/node_modules/fixture'),npm=skill(join(npmRoot,'skills'),'npm');
  writeFileSync(join(npmRoot,'package.json'),JSON.stringify({name:'fixture',version:'2.0.0'}));
@@ -142,11 +143,26 @@ test('Pi menu capabilities respect source ownership, qualified runtime and unkno
  const release=join(f.agent,'install/releases/1.3.0/node_modules/@earendil-works/pi-coding-agent');mkdirSync(release,{recursive:true});
  writeFileSync(join(release,'package.json'),JSON.stringify({name:'@earendil-works/pi-coding-agent',version:'1.3.0'}));writeFileSync(join(f.agent,'install/current-version'),'1.3.0');
  snapshot=inspectPiSkills(f.home,f.agent);assert.equal(snapshot.skills.find(item=>item.file===realpathSync(local)).canCheckPackage,false);assert.equal(snapshot.skills.find(item=>item.file===realpathSync(npm)).canCheckPackage,true);
+ for(const version of ['1.3.0','1.3.1','1.4.0','1.5.0','1.5.1','1.10.0','2.0.0','3.2.0']) {
+  const runtime=join(f.agent,`install/releases/${version}/node_modules/@earendil-works/pi-coding-agent`);mkdirSync(runtime,{recursive:true});
+  writeFileSync(join(runtime,'package.json'),JSON.stringify({name:'@earendil-works/pi-coding-agent',version,type:'module'}));
+  mkdirSync(join(runtime,'dist/core'),{recursive:true});writeFileSync(join(runtime,'dist/core/package-manager.js'),'export class DefaultPackageManager { constructor() { throw Error("Qualification must not instantiate the manager"); } }');
+  writeFileSync(join(f.agent,'install/current-version'),version);
+  assert.equal((await originalRuntime(f.agent)).version,version);
+  assert.equal(inspectPiSkills(f.home,f.agent).skills.find(item=>item.file===realpathSync(npm)).canCheckPackage,true,version);
+ }
+ for(const version of ['0.99.0','1.2.99','1.5.0-rc.1','../invalid']) {
+  writeFileSync(join(f.agent,'install/current-version'),version);assert(inspectPiSkills(f.home,f.agent).skills.every(item=>!item.canCheckPackage),version);
+  await assert.rejects(originalRuntime(f.agent),/qualified managed Pi/);
+ }
+ writeFileSync(join(f.agent,'install/current-version'),'1.3.0');
  const actual=realpathSync(npm);writeFileSync(join(f.agent,'skills-space-invocation.json'),JSON.stringify({version:1,records:{[actual]:{source:{kind:'npm',root:realpathSync(npmRoot),identity:'npm:fixture',version:'1.0.0'},mode:'auto',phase:'committed',applied:'false',appliedLine:'disable-model-invocation: false'}}}));
  snapshot=inspectPiSkills(f.home,f.agent);const changed=snapshot.skills.find(item=>item.file===actual);assert.equal(changed.canSetVisibility,true);assert.equal(changed.canRestoreDefault,true);assert.equal(changed.lifecycle.recovery,'conflict');assert.equal(changed.canRecoverInvocation,false);
  writeFileSync(npm,readFileSync(npm,'utf8').replace('---\n','---\ndisable-model-invocation: false\n'));
  const recoverable=inspectPiSkills(f.home,f.agent).skills.find(item=>item.file===actual);assert.equal(recoverable.lifecycle.recovery,'pendingRestore');assert.equal(recoverable.canRecoverInvocation,true);
+ writeFileSync(join(f.agent,'install/releases/1.4.0/node_modules/@earendil-works/pi-coding-agent/package.json'),JSON.stringify({name:'@earendil-works/pi-coding-agent',version:'1.3.0'}));
  writeFileSync(join(f.agent,'install/current-version'),'1.4.0');assert(inspectPiSkills(f.home,f.agent).skills.every(item=>!item.canCheckPackage));
+ await assert.rejects(originalRuntime(f.agent),/installation identity changed/);
  rmSync(join(f.agent,'install/current-version'));mkdirSync(join(f.agent,'install/current-version'));assert(inspectPiSkills(f.home,f.agent).skills.every(item=>!item.canCheckPackage));
 });
 

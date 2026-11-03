@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, realpathSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
-import { readProjectTrust } from './inspect-pi-skills.mjs';
+import { readProjectTrust, supportsPiPackageVersion } from './inspect-pi-skills.mjs';
 import { createRequire } from 'node:module';
 import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -41,11 +41,12 @@ export async function npmReference(manager, source) {
 }
 export async function originalRuntime(agent) {
   const version=readFileSync(join(agent,'install/current-version'),'utf8').trim();
-  if(!['1.3.0','1.4.0'].includes(version))throw Error('Package operations require Pi 1.3.0 or 1.4.0 from the official managed installation.');
+  if(!supportsPiPackageVersion(version))throw Error('Package operations require a qualified managed Pi installation, version 1.3.0 or newer.');
   const installed=realpathSync(join(agent,'install/releases',version,'node_modules/@earendil-works/pi-coding-agent'));
   const metadata=JSON.parse(readFileSync(join(installed,'package.json'),'utf8'));
   if(metadata.version!==version || metadata.name!=='@earendil-works/pi-coding-agent')throw Error('Pi installation identity changed.');
   const {DefaultPackageManager}=await import(pathToFileURL(join(installed,'dist/core/package-manager.js')));
+  if(typeof DefaultPackageManager!=='function')throw Error('Package operations require a qualified Pi package manager interface.');
   return {installed,version,DefaultPackageManager};
 }
 async function originalManager(agent,cwd,home=homedir()) {

@@ -625,3 +625,20 @@ Pi native skills supplied by an extension package expose **Manage extension** in
 Verification uses the lightweight branch: focused checks, frontend build and ordinary App inspection; no automated application interaction or persistence changes.
 
 Verification result: 12 Pi helper tests passed, including the project-delta resource ownership regression. The single existing QA App build passed staging, strict TypeScript, Vite and Rust compilation/packaging. Independent static UI review found and rechecked corrections for delta ownership and late navigation after leaving details. Ordinary App observation remains unverified: CUA binding to the QA App did not return and was stopped; no automated interaction or real-data mutation was performed.
+
+
+## 正式版 Pi 1.5.0 读取修复（2026-11-03）
+
+v0.1.0的扩展包读取入口与技能扫描分别限定1.3.0/1.4.0，官方管理安装升级至1.5.0后被直接拒绝。正式包同入口只读list实际复现退出1，约0.094秒。现统一由supportsPiPackageVersion判断稳定版本最低1.3.0，不设置主版本上限，保留current-version与原包name/version身份匹配、原DefaultPackageManager接口及原版管理路径。没有新增CLI或按本机目录特判。
+
+现有菜单资格检查同步覆盖originalRuntime入口：最低边界/1.4/1.5/补丁/较新minor及major资格、低于最低版本/预发布/非法版本、原包身份不匹配；资格读取不实例化管理器。实际1.5.0下发现/整包与资源管理/隔离npm更新回归36项全部通过，0跳过，6.723秒；补强后的发现28项单独通过，1.519秒。新版实际SDK接口、项目继承/信任隔离、资源入口不执行、更新与调用恢复均核对。其他版本只验证资格规则，不据此声明全部SDK行为已验证。
+
+唯一Tauri调试App构建通过31.206秒；App内helper对实际安装只读list成功返回1.5.0、6个扩展包、4个内置项，settings.json及trust.json摘要不变。没有替换或启动用户正式App；没有修改已发布v0.1.0附件、提交/推送或触发云端。修复App供本地检查，正式补丁版本另行安排。
+
+
+用户随后要求仅设最低版本：资格范围调整为稳定版本>=1.3.0，不限制后续主版本；原包name/version及DefaultPackageManager接口校验保留。现有默认回归直接覆盖1.3.0边界、后续补丁/minor、2.x/3.x资格以及低版本拒绝。此增量不重新打包App；此前1.5.0实际运行证据可复用，但原调试包尚未包含取消主版本上限的增量。2.x/3.x只验证资格规则，不宣称其SDK功能已实机验证。
+
+最低版本增量已通过现有28项回归（0跳过，1.985秒），未重新打包或运行其他套件。
+
+
+本轮整理提交状态：最低版本资格修复及验证记录纳入本地功能修复提交；后续同一QA包更新已包含该增量。保留上述各阶段记录及跨版本验证边界，未替换正常应用、未更新已发布附件或推送。

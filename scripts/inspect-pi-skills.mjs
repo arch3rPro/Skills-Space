@@ -19,6 +19,10 @@ const isOverride = value => /^[!+-]/.test(value);
 const strings = value => Array.isArray(value) && value.every(item => typeof item === 'string');
 // Match Pi's remembered nearest-parent decision and noninteractive default policy.
 // Reading trust must not acquire Pi's write lock or create a trust store.
+export function supportsPiPackageVersion(version) {
+  const match=/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version??'');
+  return match!==null && (Number(match[1])>1 || Number(match[1])===1 && Number(match[2])>=3);
+}
 export function readProjectTrust(home, agentDir, project, globalSettings = {}) {
   const path = join(agentDir, 'trust.json');
   const raw = existsSync(path) ? readFileSync(path, 'utf8').replace(/^\uFEFF/, '') : null;
@@ -65,7 +69,7 @@ export function inspectPiSkills(home, agentDir, project = null, management = fal
   try{releaseRaw=read(releasePath);}catch{releaseRaw='unreadable';}
   dependencies.push({path:releasePath,revision:createHash('sha256').update(releaseRaw===null?'missing':`present:${releaseRaw}`).digest('hex')});
   let packageManagerAvailable=false;
-  if(['1.3.0','1.4.0'].includes(releaseRaw?.trim())) {
+  if(supportsPiPackageVersion(releaseRaw?.trim())) {
     const path=join(agentDir,`install/releases/${releaseRaw.trim()}/node_modules/@earendil-works/pi-coding-agent/package.json`);let raw=null;
     try{raw=read(path);}catch{raw='unreadable';}
     dependencies.push({path,revision:createHash('sha256').update(raw===null?'missing':`present:${raw}`).digest('hex')});
