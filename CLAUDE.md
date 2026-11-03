@@ -18,9 +18,9 @@ Completion: accepted behavior and failure paths are implemented; every changed f
 
 ## 3. Verify
 
-Verify fixes against the established failure signal. Run relevant existing tests and `AGENTS.md` checks; add regression coverage for meaningful behavior and change assertions only with a requirement or contract basis. Start with targeted checks, broaden for policy, shared impact or wider failures, and reuse passing results under unchanged conditions.
+Apply the conditional subagent gate in AGENTS.md; routine work stays with the main agent. Before the first check, establish the fixed checklist required by [AGENTS.md](AGENTS.md#quality-review-and-verification-limits) and [development guidance](docs/agents/development.md#verification-scope-and-automation-limits). Reuse valid evidence and run only selected checks plus required builds. Reviewers may identify more defects, but may not start extra tests or application flows themselves. The parent records the concrete reason before revising execution scope.
 
-Completion: required checks passed and accepted behavior was observed, or each gap is identified. UI consistency review is part of acceptance; build success alone does not establish visual consistency. A build alone does not prove a lifecycle workflow; stop when acceptance and required checks are complete.
+Completion: selected required checks have results, material defects are resolved, and actual observations are distinguished from static or remaining manual checks. Stop verification at this boundary; do not add tests, experiments or a further review round after it merely to increase confidence.
 
 ## 4. Deliver
 
