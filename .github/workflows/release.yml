@@ -30,7 +30,7 @@ jobs:
       BUILD_RUN_ID: ${{ inputs.build_run_id }}
       PLATFORM_RUNS: ${{ inputs.platform_runs }}
       BUILD_SHA: ${{ github.sha }}
-      BUILD_SOURCES_FILE: ${{ runner.temp }}/build-sources.json
+      BUILD_SOURCES_FILE: .release-build-sources.json
     steps:
       - uses: actions/checkout@v4
         with:
