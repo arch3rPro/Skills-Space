@@ -2,7 +2,7 @@ import type { InstalledSkill, Inventory } from './upstream.ts';
 export type CodexSkillState = {
   displayName?: string | null; icon?: string | null; pluginDisplayName?: string | null;
   documentPath: string; installationPath: string; origin: 'standalone' | 'plugin' | 'system' | 'admin';
-  runtimeScope: string; inScope: boolean; enabled: boolean | null; pluginId: string | null;
+  runtimeScope: string; inScope: boolean; enabled: boolean | null; allowImplicitInvocation?: boolean | null; pluginId: string | null;
   canToggle: boolean; needsConfirmation: boolean; toggleScope: 'user' | null; lifecycleOwner: 'skills-cli' | 'codex-plugin' | 'external';
 };
 export type CodexActionState = 'available' | 'restricted' | 'overridden' | 'notIntegrated' | 'unknown' | 'notApplicable' | 'stale';

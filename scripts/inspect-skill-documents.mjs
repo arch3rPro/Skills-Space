@@ -62,6 +62,7 @@ for (const path of paths) {
     const name = clean(data.name), description = clean(data.description);
     if (!name || !description || name.startsWith("-") || name === "*" || /[\x00-\x1f\x7f]/.test(name)) throw new Error("Invalid skill metadata.");
     let skillInterface = null;
+    let allowImplicitInvocation = null;
     if (metadataOnly) {
       try {
         const file = join(path, "agents/openai.yaml");
@@ -69,12 +70,24 @@ for (const path of paths) {
         const within = relative(root, resolved);
         if (within && within !== ".." && !within.startsWith("../") && !within.startsWith("..\\") && !isAbsolute(within) && (await stat(resolved)).size <= 256 * 1024) {
           const metadata = await readFile(resolved, "utf8");
-          if (Buffer.byteLength(metadata) <= 256 * 1024) skillInterface = parse(metadata)?.interface ?? null;
+          if (Buffer.byteLength(metadata) <= 256 * 1024) {
+            const value = parse(metadata);
+            skillInterface = value?.interface ?? null;
+            if (value == null || typeof value === "object" && !Array.isArray(value)) {
+              const policy = value?.policy;
+              if (policy == null || typeof policy === "object" && !Array.isArray(policy)) {
+                const declared = policy?.allow_implicit_invocation;
+                allowImplicitInvocation = typeof declared === "boolean" ? declared : null;
+              }
+            }
+          }
         }
-      } catch { /* Optional presentation metadata must not prevent local management. */ }
+      } catch {
+        // Missing, invalid or unreadable declarations do not produce a display state.
+      }
     }
     const hash = metadataOnly ? null : await hashFolder(path);
-    results.push({ path, name, description, interface: skillInterface, internal: data.metadata?.internal === true, hash, error: null });
+    results.push({ path, name, description, interface: skillInterface, allowImplicitInvocation, internal: data.metadata?.internal === true, hash, error: null });
   } catch (error) { results.push({ path, hash: metadataOnly ? null : await hashFolder(path), error: String(error) }); }
 }
 console.log(JSON.stringify(results));

@@ -795,6 +795,99 @@ fn native_round_trip(app_only: bool) {
 }
 
 #[test]
+fn invocation_metadata_is_readonly_and_only_reports_explicit_source_policy() {
+    let fixture = TemporaryDirectory::new().unwrap();
+    let e = engine(&fixture.0);
+    let cases = [
+        ("missing", None, None),
+        ("empty", Some(""), None),
+        ("null-policy", Some("policy: null\n"), None),
+        ("default", Some("interface:\n  display_name: Readable\n"), None),
+        ("automatic", Some("policy:\n  allow_implicit_invocation: true\n"), Some(true)),
+        ("manual", Some("policy:\n  allow_implicit_invocation: false\n"), Some(false)),
+        ("wrong-type", Some("policy:\n  allow_implicit_invocation: \"false\"\n"), None),
+        ("invalid", Some("policy: [\n"), None),
+        ("invalid-policy", Some("policy: false\n"), None),
+    ];
+    let mut paths = Vec::new();
+    let mut before = Vec::new();
+    for (name, yaml, _) in &cases {
+        let root = fixture.0.join(name);
+        skill(&root, name);
+        fs::write(root.join("SKILL.json"), r#"{"policy":{"allow_implicit_invocation":false}}"#).unwrap();
+        if let Some(yaml) = yaml {
+            fs::create_dir_all(root.join("agents")).unwrap();
+            fs::write(root.join("agents/openai.yaml"), yaml).unwrap();
+        }
+        before.push(tree_signature(&root).unwrap());
+        paths.push(root.to_string_lossy().into_owned());
+    }
+    let metadata = e.codex_documents(&paths).unwrap();
+    for (index, (name, _, expected)) in cases.iter().enumerate() {
+        let item = &metadata[&paths[index]];
+        assert_eq!(item.allow_implicit_invocation, *expected, "{name}");
+        assert!(item.document.hash.is_none(), "metadata-only must not calculate or alter a content hash");
+        assert_eq!(tree_signature(Path::new(&paths[index])).unwrap(), before[index], "{name}: reading must preserve every file byte");
+    }
+    #[cfg(unix)]
+    if let Some(binary) = std::env::var_os("SKILLS_SPACE_CODEX_TEST_BINARY") {
+        let home = fixture.0.join("snapshot-home");
+        fs::create_dir_all(home.join(".local/bin")).unwrap();
+        fs::create_dir_all(home.join(".agents/skills")).unwrap();
+        fs::create_dir_all(home.join(".codex/skills")).unwrap();
+        std::os::unix::fs::symlink(PathBuf::from(binary), home.join(".local/bin/codex")).unwrap();
+        for name in ["manual", "automatic"] {
+            std::os::unix::fs::symlink(fixture.0.join(name), home.join(".agents/skills").join(name)).unwrap();
+        }
+        std::os::unix::fs::symlink(fixture.0.join("manual"), home.join(".codex/skills/manual-alias")).unwrap();
+        let automatic_document = identity(&fixture.0.join("automatic/SKILL.md"));
+        let config = format!("[[skills.config]]\npath = {}\nenabled = false\n", json!(automatic_document));
+        fs::write(home.join(".codex/config.toml"), &config).unwrap();
+        let native_engine = engine(&home);
+        let binary = super::binary(&native_engine).unwrap();
+        let mut session = Session::start(&native_engine, &binary, &home).unwrap();
+        let original = list_skills(&mut session, &home).unwrap().0;
+        drop(session);
+        let snapshot = inspect_skills(&native_engine, &global()).unwrap();
+        for (name, automatic) in [("manual", false), ("automatic", true)] {
+            let document = identity(&fixture.0.join(name).join("SKILL.md"));
+            let found: Vec<_> = snapshot.skills.iter().filter(|row| Path::new(&row.state.document_path) == document).collect();
+            let mut expected: BTreeSet<_> = original.iter().filter(|row| Path::new(&row.state.document_path) == document).map(|row| row.state.installation_path.clone()).collect();
+            assert!(!expected.is_empty(), "original CLI must discover {name}");
+            expected.insert(home.join(".agents/skills").join(name).to_string_lossy().into_owned());
+            if name == "manual" { expected.insert(home.join(".codex/skills/manual-alias").to_string_lossy().into_owned()); }
+            let actual: BTreeSet<_> = found.iter().map(|row| row.state.installation_path.clone()).collect();
+            for path in expected { assert!(actual.contains(&path), "native record or physical alias missing: {name}: {path}"); }
+            for row in found {
+                assert_eq!(row.state.allow_implicit_invocation, Some(automatic), "snapshot enrichment: {name}");
+                assert_eq!(row.state.enabled, Some(!automatic), "enablement remains independent of source declaration");
+            }
+        }
+        assert_eq!(fs::read_to_string(home.join(".codex/config.toml")).unwrap(), config);
+        for (index, _) in cases.iter().enumerate() {
+            assert_eq!(tree_signature(Path::new(&paths[index])).unwrap(), before[index], "native snapshot must preserve source files");
+        }
+    }
+    #[cfg(unix)]
+    {
+        let root = fixture.0.join("broken-link");
+        skill(&root, "broken-link");
+        fs::create_dir_all(root.join("agents")).unwrap();
+        std::os::unix::fs::symlink("missing.yaml", root.join("agents/openai.yaml")).unwrap();
+        let path = root.to_string_lossy().into_owned();
+        assert_eq!(e.codex_documents(&[path.clone()]).unwrap()[&path].allow_implicit_invocation, None);
+        assert!(fs::symlink_metadata(root.join("agents/openai.yaml")).unwrap().file_type().is_symlink());
+        fs::remove_file(root.join("agents/openai.yaml")).unwrap();
+        let outside = fixture.0.join("outside.yaml");
+        fs::write(&outside, "policy:\n  allow_implicit_invocation: false\n").unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("agents/openai.yaml")).unwrap();
+        assert_eq!(e.codex_documents(&[path.clone()]).unwrap()[&path].allow_implicit_invocation, None, "escaped metadata must not be followed");
+        assert_eq!(fs::read_to_string(outside).unwrap(), "policy:\n  allow_implicit_invocation: false\n");
+
+    }
+}
+
+#[test]
 fn portable_plugin_uses_fixed_components_and_openai_overlay() {
     let fixture = TemporaryDirectory::new().unwrap();
     fs::create_dir_all(fixture.0.join(".codex-plugin")).unwrap();

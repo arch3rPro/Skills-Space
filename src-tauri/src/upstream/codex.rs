@@ -34,6 +34,8 @@ pub struct SkillState {
     pub runtime_scope: String,
     pub in_scope: bool,
     pub enabled: Option<bool>,
+    #[serde(default)]
+    pub allow_implicit_invocation: Option<bool>,
     pub plugin_id: Option<String>,
     pub can_toggle: bool,
     pub needs_confirmation: bool,
@@ -280,6 +282,7 @@ fn list_skills(
                             .as_bool()
                             .ok_or("Codex skill enabled state unavailable.")?,
                     ),
+                    allow_implicit_invocation: None,
                     plugin_id: plugin,
                     can_toggle,
                     needs_confirmation: false,
@@ -789,10 +792,15 @@ fn inspect_mode(
                 .map(|p| p.to_string_lossy().into_owned())
         })
         .collect();
-    let metadata = if missing_documents.is_empty() {
+    let metadata_paths: Vec<String> = skills.iter()
+        .filter_map(|skill| Path::new(&skill.state.document_path).parent())
+        .map(|path| path.to_string_lossy().into_owned())
+        .chain(missing_documents)
+        .collect::<BTreeSet<_>>().into_iter().collect();
+    let metadata = if metadata_paths.is_empty() {
         None
     } else {
-        engine.codex_documents(&missing_documents).ok()
+        engine.codex_documents(&metadata_paths).ok()
     };
     for plugin in plugins.iter().filter(|p| p.installed) {
         for document in &plugin.skills {
@@ -833,6 +841,7 @@ fn inspect_mode(
                     runtime_scope: if plugin.enabled { "unloaded" } else { "user" }.into(),
                     in_scope: target.scope == "global",
                     enabled: None,
+                    allow_implicit_invocation: None,
                     plugin_id: Some(plugin.id.clone()),
                     can_toggle: true,
                     needs_confirmation: false,
@@ -892,6 +901,10 @@ fn inspect_mode(
         }
     }
     for skill in &mut skills {
+        skill.state.allow_implicit_invocation = metadata.as_ref()
+            .and_then(|items| Path::new(&skill.state.document_path).parent()
+                .and_then(|path| items.get(&path.to_string_lossy().into_owned())))
+            .and_then(|item| item.allow_implicit_invocation);
         if let Some(plugin) = plugins
             .iter()
             .find(|plugin| Some(&plugin.id) == skill.state.plugin_id.as_ref())

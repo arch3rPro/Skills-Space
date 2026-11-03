@@ -244,3 +244,24 @@ test('hot cards expose the period count and yesterday change as independent sibl
  assert.doesNotMatch(count.props.text,/昨日|219/);assert.equal(change.props.change,219);assert.equal(change.props.compact,true);
  assert(![count.props.children].flat(Infinity).some(child=>child?.type===InstallationChange),'change does not nest inside the count hint');
 });
+
+
+const invocationOutput=resolve('.scratch/skill-document-check/invocation-status.mjs');
+await build({entryPoints:['src/components/skill-invocation-status.tsx'],outfile:invocationOutput,bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
+const {SkillInvocationStatus}=await import(pathToFileURL(invocationOutput).href);
+test('source invocation status shows declared channels without editing or opening the card',()=>{
+ for(const [automatic,labels,icons] of [[true,['自动选择','手动调用'],['sparkles','hand']],[false,['手动调用'],['hand']]]){
+  const props={automatic,zh:true};
+  const html=renderToStaticMarkup(createElement(TooltipPrimitive.Provider,null,createElement(SkillInvocationStatus,props)));
+  for(const label of labels)assert(html.includes(`aria-label="${label}"`));
+  for(const icon of icons)assert(html.includes(`lucide-${icon}`));
+  assert.equal((html.match(/role="img"/g)??[]).length,icons.length);
+  if(!automatic){assert(!html.includes('lucide-sparkles'));assert(!html.includes('aria-label="自动选择"'));}
+  assert(!html.includes('<button'));assert(!html.includes('aria-pressed'));assert(!html.includes('不支持修改'));
+  const root=SkillInvocationStatus(props);let prevented=0,stopped=0;
+  root.props.onClick({preventDefault(){prevented++;},stopPropagation(){stopped++;}});
+  assert.equal(prevented,1,'status click must consume the card default action');
+  assert.equal(stopped,1,'status click must not bubble into card details');
+ }
+ for(const automatic of [null,undefined])assert.equal(renderToStaticMarkup(createElement(TooltipPrimitive.Provider,null,createElement(SkillInvocationStatus,{automatic,zh:true}))), '');
+});

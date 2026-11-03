@@ -901,6 +901,9 @@ struct DocumentMetadata {
 }
 #[derive(Deserialize)]
 struct CodexDocumentMetadata {
+    #[serde(default)]
+    #[serde(rename = "allowImplicitInvocation")]
+    allow_implicit_invocation: Option<bool>,
     #[serde(flatten)]
     document: DocumentMetadata,
     #[serde(default)]

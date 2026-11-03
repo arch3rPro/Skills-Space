@@ -9,6 +9,13 @@ test('Codex action context cannot leak to other Agents; native ownership never r
  assert.equal(canAgentSkillAction(skill,'codex','codex-toggle'),true);
  for(const context of [null,'pi','hermes-agent'])assert.equal(canAgentSkillAction(skill,context,'codex-toggle'),false);
  assert.equal(skillAgentState(skill,'pi').codex,null);
+ for(const automatic of [true,false,null] as const){
+  const declared={...skill,codexState:{...state,enabled:false,allowImplicitInvocation:automatic}};
+  assert.equal(skillAgentState(declared,'codex').codex?.allowImplicitInvocation,automatic);
+  assert.equal(skillAgentState(declared,'codex').codex?.enabled,false,'source invocation metadata cannot imply enablement');
+  for(const context of [null,'pi','hermes-agent','deepseek-harness'])assert.equal(skillAgentState(declared,context).codex,null);
+ }
+
  assert.equal(skillCollection(skill),'managed');
  const plugin:InstalledSkill={...skill,cliManaged:true,codexState:{...state,origin:'plugin',pluginId:'demo@market',canToggle:false,lifecycleOwner:'codex-plugin'}};
  assert.equal(skillCollection(plugin),'agent');assert.equal(canRemove([plugin],['same'],['codex']),false);assert.deepEqual(removalTargetAgents(plugin,'codex'),[]);
@@ -24,9 +31,9 @@ test('batch targets canonical documents, retains distinct same-name paths, and s
 });
 test('snapshot merge retains physical link ownership and never treats a missing state as disabled',()=>{
  const inventory={version:'1',agents:[],skills:[skill],warnings:[]};
- const snapshot:CodexSnapshot={rules:[],capabilities:{writeConfig:true,nameRules:true},binary:'/bin/codex',version:'fixture',codexHome:'/home',configPath:'/config',revision:'r',plugins:[],warnings:[],skills:[{name:'same',description:'',state:{...state,installationPath:'/real',enabled:false,inScope:false,lifecycleOwner:'external'}}]};
+ const snapshot:CodexSnapshot={rules:[],capabilities:{writeConfig:true,nameRules:true},binary:'/bin/codex',version:'fixture',codexHome:'/home',configPath:'/config',revision:'r',plugins:[],warnings:[],skills:[{name:'same',description:'',state:{...state,installationPath:'/real',enabled:false,allowImplicitInvocation:false,inScope:false,lifecycleOwner:'external'}}]};
  const merged=mergeCodexStates(inventory,snapshot)!.skills[0].codexState!;
- assert.equal(merged.installationPath,'/link');assert.equal(merged.lifecycleOwner,'skills-cli');assert.equal(merged.inScope,true);assert.equal(merged.enabled,false);
+ assert.equal(merged.installationPath,'/link');assert.equal(merged.lifecycleOwner,'skills-cli');assert.equal(merged.inScope,true);assert.equal(merged.enabled,false);assert.equal(merged.allowImplicitInvocation,false);assert.equal(state.allowImplicitInvocation,undefined,'snapshot enrichment does not mutate the physical source record');
  const absent=mergeCodexStates(inventory,{...snapshot,skills:[]})!.skills[0].codexState!;
  assert.equal(absent.enabled,null);assert.equal(absent.canToggle,false);
 });

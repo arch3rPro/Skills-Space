@@ -943,3 +943,32 @@ An independent check generation rejects late responses after context changes, re
 Single-plugin update results are invalidated per affected plugin, preserving other cards' confirmed available-update icons through success and failure. Pi uses the reviewed source/scope/root list, excluding pinned installations; its failure readback preserves the other results. Explicit full rechecks, refreshes and scope changes retain their existing reset behavior.
 
 Targeted two-plugin success/failure regressions passed; Pi also verifies affected copies versus pinned/unaffected installations. Frontend and normal/shared-QA App builds passed with index-Begjn30Y.js. The reused native QA App was opened once to confirm rendering; no plugin update, slow-source fixture or broad workflow test was performed for this localized change. Static review and git diff --check passed.
+
+
+## Codex invocation mode display (2026-11-03)
+
+Accepted task: show the source-declared invocation channels in Codex skill cards, without editing skill files, configuration, hashes or runtime policy. Use the existing automatic-selection/manual-invocation icons and shared card/detail composition. Automatic selection also permits manual invocation; a false `policy.allow_implicit_invocation` declares manual-only mode. This is source policy, separate from the existing enabled switch, not proof of a running session loading the skill. Show an invocation state only when policy.allow_implicit_invocation is explicitly boolean. Missing metadata, omitted settings, and malformed/unreadable declarations produce no card icon or detail row, even though the runtime has a default. Do not display a question mark or unknown-mode label. Show only the allowed channels, with no unsupported-editing notice or editable invocation/batch action. Current-Agent gating applies to managed/native skills in global/project scopes; discovery, counts, names and other Agent UI stay unchanged.
+
+Reuse the bounded metadata-only document helper and one deduplicated batch for discovered Codex documents, including unloaded plugin skills. No new parser/dependency or per-skill process. Verification selects the lightweight branch: metadata and Agent-isolation checks, independent static UI review, then one local QA build. The previously blocked desktop-binding route remains stopped; actual layout stays for manual observation.
+
+
+Targeted verification: 30 Codex TypeScript checks and one read-only status component check passed. The metadata/native integration check passed against the original Codex 0.166.0 in an isolated HOME, comparing original identities plus prepared physical aliases and verifying every matching record's explicit true/false policy. Source declaration and enabled state were set oppositely to verify independence. Skill-tree signatures and configuration bytes were unchanged. Missing/empty/omitted/invalid metadata, broken links and escaped metadata yield no displayed state; SKILL.json does not substitute for this source policy. The existing document checks remain valid and were reused. No model request, account access or desktop automation was performed. Static design review passed; actual layout and keyboard observation remain manual.
+
+
+The single QA App build for this increment passed in 34.061 seconds, including the strict frontend build; ad hoc signing and strict signature verification passed. The shared QA bundle was updated in place, without replacing the normal application. No commit, push or cloud build was performed.
+
+
+### Card-only invocation channels correction (2026-11-03)
+
+User correction: invocation status belongs only in the card, not skill-detail metadata. For explicit true, show both existing Sparkles (automatic selection) and Hand (manual invocation) icons; explicit false shows Hand only. Missing/invalid settings still produce no status. The status region consumes clicks so it neither changes settings nor opens card details; both per-channel tooltips remain mouse/keyboard accessible. Remove the unrequested detail row. Native policy reading and other Agent behavior are unchanged. Fixed lightweight verification: update the existing status component regression for channel rendering/click consumption/omitted values, static-check removal of the detail field, and one frontend build; reuse native and Agent-isolation evidence, no original-runtime/desktop/model/restart checks or new package build.
+
+
+The localized component regression passed in 0.661 seconds: explicit true has both glyphs, false only Hand, omitted values have no output, no editing button is present, and the actual root click handler prevents default and stops propagation. Independent static review confirmed card-navigation suppression and removal of the unrequested detail field. Native inspection and Agent isolation were unchanged and were not rerun. Actual visual/keyboard behavior was not observed.
+
+
+The single frontend build passed in 14.068 seconds, including strict TypeScript. No native/CLI/desktop checks, extra builds or application packaging were run for this UI correction. The previous QA bundle does not contain this correction. No commit or push.
+
+User-requested application update: the same shared QA bundle now includes the card-channel correction. One Tauri build passed in 20.256 seconds, followed by ad hoc signing and strict signature verification; no tests were repeated. The normal app was not replaced, and no commit or push was made.
+
+
+The final card-only correction, read-only policy projection and verification records are included in the local fix commit. Earlier implementation checkpoints remain historical; no detail metadata is added. Actual visual acceptance remains unverified. No push or release.
