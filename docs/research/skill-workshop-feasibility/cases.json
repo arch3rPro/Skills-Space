@@ -1,0 +1,30 @@
+{
+  "skill_name": "meeting-notes",
+  "status": "Inputs used in the 2026-11-04 feasibility run; observed outputs and scope are recorded in RESULTS.md.",
+  "cases": [
+    {
+      "id": "case-1",
+      "prompt": "把下面的会议速记整理成简明会议纪要。",
+      "input": "周三讨论发布。确定先修复导出空文件的问题。林同学负责修复，周五前交付。帮助文案需要调整，还没定谁做、什么时候做。陈同学提议本周发布，赵同学建议下周，会议没有决定。",
+      "expected_checks": [
+        "将修复导出空文件记录为已确认事项。",
+        "行动项保留林同学和周五前，不虚构具体日期。",
+        "帮助文案调整的负责人和时间均标为未明确。",
+        "本周或下周发布保留为待确认，不写成发布决定。",
+        "输出含风险与待确认章节，并保持中文。"
+      ]
+    },
+    {
+      "id": "case-2",
+      "prompt": "Turn these rough notes into concise meeting notes.",
+      "input": "We agreed to keep the existing login flow. Alex will check the timeout report; no deadline was set. A separate sign-up flow was suggested, but nobody approved it. The team is unsure whether the report includes mobile users.",
+      "expected_checks": [
+        "Keep the existing login flow as a confirmed decision.",
+        "Record Alex as the timeout-report owner and the deadline as Not specified.",
+        "Do not present a separate sign-up flow as approved.",
+        "Record uncertainty about mobile users without inventing an answer.",
+        "Include a risks/unresolved section and keep the output in English."
+      ]
+    }
+  ]
+}

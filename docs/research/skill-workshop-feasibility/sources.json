@@ -1,0 +1,31 @@
+{
+  "checked_on": "2026-11-04",
+  "status": "Source provenance snapshot; subsequent execution evidence is recorded in RESULTS.md.",
+  "cli_version": "1.7.4",
+  "sources": [
+    {
+      "repo": "anthropics/skills",
+      "stars": 187017,
+      "sha": "ca45fc496a3436251f191354091d557da31c15b5",
+      "branch": "main"
+    },
+    {
+      "repo": "openai/skills",
+      "stars": 28492,
+      "sha": "49f948faa9258a0c61caceaf225e179651397431",
+      "branch": "main"
+    },
+    {
+      "repo": "alchaincyf/darwin-skill",
+      "stars": 6780,
+      "sha": "8a8b66258e3c45d6ae4aea39719468c6428fcb0a",
+      "branch": "master"
+    },
+    {
+      "repo": "microsoft/SkillOpt",
+      "stars": 18856,
+      "sha": "bc0a392ef0a7f92840ec673d80204d34ced169d0",
+      "branch": "main"
+    }
+  ]
+}

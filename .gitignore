@@ -41,6 +41,11 @@ docs/specs/*
 !docs/specs/*.md
 docs/research/*
 !docs/research/*.md
+!docs/research/skill-workshop-feasibility/
+docs/research/skill-workshop-feasibility/*
+!docs/research/skill-workshop-feasibility/*.md
+!docs/research/skill-workshop-feasibility/cases.json
+!docs/research/skill-workshop-feasibility/sources.json
 docs/adr/*
 !docs/adr/*.md
 !docs/archive/
