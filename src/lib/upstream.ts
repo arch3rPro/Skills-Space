@@ -18,7 +18,7 @@ export type OperationResult = { items: Array<{ destination?: string | null; agen
 export type UpdateStatus = { currentRevision?: string | null; latestRevision?: string | null; localState?: "clean"|"modified"|"unverified"; skill: string; status: "available" | "current" | "unknown" | "removed"; message: string };
 export type Project = { path: string; name: string; icon: string };
 export type InstallMode = "symlink" | "copy";
-export type Preferences = { storePageSize?: number; dshContexts?:Record<string,string|null>; installMode: InstallMode; colorTheme: string; fontFamily: string; fontSize: number; theme: string; language: string; projects: Project[]; collapsedSections: string[]; hiddenAgents: string[]; visibleAgents: string[]; agentOrder: string[] };
+export type Preferences = { workshopDirectory?:string|null;workshopHistoryPaths?:string[]; storePageSize?: number; dshContexts?:Record<string,string|null>; installMode: InstallMode; colorTheme: string; fontFamily: string; fontSize: number; theme: string; language: string; projects: Project[]; collapsedSections: string[]; hiddenAgents: string[]; visibleAgents: string[]; agentOrder: string[] };
 
 export function detectedSkillAgents(skill: InstalledSkill, agents: Agent[]): Agent[] {
   return agents.filter((agent) => agent.installationStatus === "confirmed" && skill.agents.includes(agent.id));

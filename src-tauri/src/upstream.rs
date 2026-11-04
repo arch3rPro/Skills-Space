@@ -23,6 +23,7 @@ pub mod skill_sync;
 pub mod source_removal;
 mod update_safety;
 pub mod usage;
+pub mod workshop;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},

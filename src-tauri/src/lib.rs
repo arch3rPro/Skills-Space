@@ -34,6 +34,7 @@ pub fn run() {
             upstream::creation::upstream_creation_plan,
             upstream::creation::upstream_create,
             upstream::creation::upstream_open_created,
+            upstream::workshop::workshop_command,
             upstream::usage::upstream_use_agents,
             upstream::usage::upstream_use_prepare,
             upstream::usage::upstream_use_start,

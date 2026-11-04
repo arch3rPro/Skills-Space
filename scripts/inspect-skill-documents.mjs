@@ -87,7 +87,11 @@ for (const path of paths) {
       }
     }
     const hash = metadataOnly ? null : await hashFolder(path);
-    results.push({ path, name, description, interface: skillInterface, allowImplicitInvocation, internal: data.metadata?.internal === true, hash, error: null });
+    const versionValue = data.metadata?.version ?? data.version;
+    const version = typeof versionValue === 'string' || typeof versionValue === 'number' ? clean(String(versionValue)) || null : null;
+    const license = typeof data.license === 'string' ? clean(data.license) || null : null;
+    const compatibility = typeof data.compatibility === 'string' ? clean(data.compatibility) || null : null;
+    results.push({ path, name, description, version, license, compatibility, interface: skillInterface, allowImplicitInvocation, internal: data.metadata?.internal === true, hash, error: null });
   } catch (error) { results.push({ path, hash: metadataOnly ? null : await hashFolder(path), error: String(error) }); }
 }
 console.log(JSON.stringify(results));

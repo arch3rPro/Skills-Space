@@ -15,6 +15,7 @@
 | [UI 设计基线](design/ui-system.md) | UI 实现／审查前必读；tweakcn 主题、shadcn 组件清单、简约设计语言、信息层级与一致性验收的权威入口 |
 | [Codex 设计基线推广](specs/0011-codex-inspired-design-baseline.md) | 已确认样板的全项目推广范围、实现归属及实际验证状态 |
 | [完整组件目录](design/component-catalog.md) | 官方 Radix registry 全量组件、用途、安装状态和参考入口；已安装可复用，未安装可按需添加，空条目单独标明 |
+| [创意工坊交互原型](design/skill-workshop-preview.md) | 新分支中的独立前端演示、打开方式、数据边界和本轮验证范围；不代表产品后端交付 |
 | [领域文档约定](agents/domain.md) | 何时更新术语和 ADR；不维护第二套术语表 |
 | [技能使用约定](agents/skill-usage.md) | UI 技能按任务触发必读；其他方法按需选择，不自动调用 TDD、多 Agent 或整套插件流程 |
 | [本地任务记录](agents/issue-tracker.md) | 多任务交接需要时使用本地工单；简单修改不强制工单与状态模板 |
@@ -31,6 +32,7 @@
 | [0003 上游一致重构](specs/0003-upstream-aligned-refactoring.md) | 当前已确认基线；部分完成 | 原版 CLI、本机项目/全局、原有视觉与操作边界；受支持来源的核心闭环已补齐，完整上游能力仍待接入 |
 | [0004 上游能力与闭环](specs/0004-upstream-capability-completion-plan.md) | 当前分阶段实施计划 | 核心生命周期已有 2026-10-13 交付记录；其余上游能力、来源/参数和平台验证仍待完成 |
 | [0005 项目优化](specs/0005-project-optimization-plan.md) | 结构清理、加载／筛选修正及当前资料清理已实施；其余结构优化为候选 | 2026-10-13 移除退役实现、提取图标／弹窗／基础原生测试，补充现有验证入口；其余模块优化仍为计划 |
+| [0013 创意工坊](specs/0013-skill-workshop.md) | 2026-11-04 设计已确认，首批接入中 | 基于 Codex／Pi 实测推进对话工作台、真实草稿及原安装交接；区分当前首批和待开发的评估／试用／删除保护 |
 | [0009 DSH 原生技能管理补齐](specs/0009-dsh-native-skill-management.md) | 原生管理、通用配置 A—C 及桌面运行包读取已实施并提交 | 上下文检查、声明组合、Profile 覆盖／恢复、四种调用策略及独立文件废纸篓卸载；父 preset／动态只读 |
 | [0012 DSH 设置与原生管理重做方案](specs/0012-dsh-settings-native-skills-rebuild.md) | DSH 配置、完整发现库存、托管/原生独立策略已随 `ec1feb3` 提交；版本反馈 `008a896`、共享筛选 `79b32ef`；各轮定向验证及待用户手测边界保留 |
 | [0007 DeepSeek Harness 技能管理](specs/0007-deepseek-harness-skill-management.md) | 首批完成；完整原生回归通过 | DSH 只读检查、原版通用 CLI 生命周期及增强适配／通用支持分类 |
@@ -114,6 +116,7 @@
 
 - [技能分类与 Pi 配置入口](research/skill-collections-review.md)：托管／原生技能分区、能力边界、Pi 可配置标记及候选配置与验证。
 - [技能工作台想法与入口收敛](research/skill-workbench-ideas.md)：仅记录待重新调研的工作台草图；当前隐藏创建／测试入口、目录与添加技能入口位置的实施范围及验证。
+- [创意工坊创建与评估选型](research/skill-workshop-creator-evaluation-2026-11-04.md)：官方 creator、darwin 与 SkillOpt 固定源码对比；Codex、Pi 最小验证及同一产物跨 Agent 试用已完成，未安装或接入页面。
 
 - [Codex 实现整体复查](research/codex-implementation-audit-2026-10-21.md)：用户反馈后的界面职责、插件启停、来源覆盖与验收缺口；更正上一轮完成结论。
 

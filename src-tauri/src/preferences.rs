@@ -63,6 +63,10 @@ pub struct Preferences {
     pub store_page_size: usize,
     #[serde(default)]
     pub install_mode: InstallMode,
+    #[serde(default)]
+    pub workshop_directory: Option<String>,
+    #[serde(default)]
+    pub workshop_history_paths: Vec<String>,
     #[serde(deserialize_with = "deserialize_projects")]
     pub projects: Vec<Project>,
     #[serde(default)]
@@ -115,6 +119,8 @@ impl Default for Preferences {
             language: "zh-CN".into(),
             store_page_size: default_store_page_size(),
             install_mode: InstallMode::default(),
+            workshop_directory: None,
+            workshop_history_paths: vec![],
             projects: vec![],
             collapsed_sections: vec![],
             hidden_agents: vec![],
@@ -123,6 +129,16 @@ impl Default for Preferences {
             agent_order: vec![],
             dsh_contexts: Default::default(),
         }
+    }
+}
+fn valid_workshop_directory(path: &str) -> bool {
+    !path.contains('\0') && (std::path::Path::new(path).is_absolute() || path.starts_with("~/") && path.len() > 2)
+}
+pub(crate) fn workshop_path(path: Option<&str>, home: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    match path {
+        None => Ok(home.join(".skills-space").join("workshop")),
+        Some(path) if valid_workshop_directory(path) => Ok(path.strip_prefix("~/").map(|part| home.join(part)).unwrap_or_else(|| path.into())),
+        _ => Err("Workshop directory must be an absolute path or a ~/ path.".into()),
     }
 }
 pub fn read(app: &AppHandle) -> Result<Preferences, String> {
@@ -186,7 +202,7 @@ pub fn upstream_preferences(app: AppHandle) -> Result<Preferences, String> {
 #[tauri::command]
 pub fn upstream_save_preferences(
     app: AppHandle,
-    preferences: Preferences,
+    mut preferences: Preferences,
 ) -> Result<Preferences, String> {
     if !matches!(preferences.store_page_size, 12 | 24 | 48)
         || !valid_appearance(&preferences)
@@ -208,6 +224,13 @@ pub fn upstream_save_preferences(
         )
     }) {
         return Err("Duplicate project paths.".into());
+    }
+    if preferences.workshop_directory.as_deref().is_some_and(|path| !valid_workshop_directory(path)) {
+        return Err("Workshop directory must be an absolute path or a ~/ path.".into());
+    }
+    let previous = read(&app)?;
+    for path in previous.workshop_history_paths.into_iter().chain(previous.workshop_directory.filter(|path| Some(path) != preferences.workshop_directory.as_ref())) {
+        if !preferences.workshop_history_paths.contains(&path) { preferences.workshop_history_paths.push(path); }
     }
     let directory = app.path().app_config_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
