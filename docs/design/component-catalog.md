@@ -110,7 +110,7 @@ pnpm exec shadcn view @shadcn/<name>
 | `avatar` | Identity image with fallback | Add when needed | [Docs](https://ui.shadcn.com/docs/components/radix/avatar) |
 | `carousel` | Sequential media/content navigation | Add when needed | [Docs](https://ui.shadcn.com/docs/components/radix/carousel) |
 | `scroll-area` | A deliberately controlled scroll region | Add when needed | [Docs](https://ui.shadcn.com/docs/components/radix/scroll-area) |
-| `resizable` | User-resizable panels | Add when needed | [Docs](https://ui.shadcn.com/docs/components/radix/resizable) |
+| `resizable` | User-resizable panels | Installed; WorkshopWorkbench | [Docs](https://ui.shadcn.com/docs/components/radix/resizable) |
 | `direction` | Direction context for RTL/LTR interfaces | Add when needed | [Docs](https://ui.shadcn.com/docs/components/radix/direction) |
 
 ## Feedback and state
@@ -154,3 +154,7 @@ Third-party registries, blocks and additional themes are outside this official U
 2026-10-16: Added Sonner through the project shadcn CLI. Its local wrapper follows existing semantic theme tokens and uses the existing appearance system, without `next-themes`.
 
 2026-10-17: AlertDialog added from official radix-nova CLI view after dry-run exposed an overwrite of the customized Button. Only the new wrapper was adopted; it uses local cn and Button. Compact confirmation variants retain semantic tokens with a unified surface and no divided footer. The 64-entry registry availability snapshot remains dated 2026-10-15; only local installation status was refreshed.
+
+2026-11-04 workbench redesign: Button adds a navigation variant for compact rectangular file rows and aria-current selection; existing variants are unchanged. Workshop composes it with Collapsible instead of the application SidebarMenu. The conversation/files split and the inner preview/tree split use Resizable with independent bounds; no new registry component or dependency was installed.
+
+2026-11-04 workshop file controls: shared Button/Hint actions provide open-folder, refresh and close; preview uses the reusable subtle-scrollbar utility based on the existing native page scroller. Creation metadata edits use the existing Modal/Field composition and keep generated skill documents unchanged. No new component or dependency.

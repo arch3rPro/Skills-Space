@@ -266,6 +266,15 @@ html, body, #root { height: 100%; overflow: hidden; overscroll-behavior: none; }
 @supports selector(::-webkit-scrollbar) {
     .app-content { scrollbar-width: auto; }
 }
+/* Compact document scrollers share the native page treatment without inset edges. */
+.subtle-scrollbar { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, CanvasText 16%, transparent) transparent; }
+.subtle-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; background: transparent; border: 0; }
+.subtle-scrollbar::-webkit-scrollbar-track { margin-block: 8px; background: transparent; border: 0; box-shadow: none; }
+.subtle-scrollbar::-webkit-scrollbar-thumb { background: color-mix(in srgb, CanvasText 16%, transparent); border: 0; border-radius: 999px; box-shadow: none; }
+.subtle-scrollbar::-webkit-scrollbar-corner { background: transparent; border: 0; }
+@supports selector(::-webkit-scrollbar) {
+    .subtle-scrollbar { scrollbar-width: auto; }
+}
 .appearance-settings { container: appearance / inline-size; }
 .appearance-settings .settings-fields > [data-slot="field"] { padding-block: .75rem; }
 .appearance-theme-group { display: grid; grid-template-columns: 8rem minmax(0,1fr); gap: 1.5rem; padding-block: .75rem; }
