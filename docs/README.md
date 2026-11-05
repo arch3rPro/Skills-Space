@@ -32,7 +32,7 @@
 | [0003 上游一致重构](specs/0003-upstream-aligned-refactoring.md) | 当前已确认基线；部分完成 | 原版 CLI、本机项目/全局、原有视觉与操作边界；受支持来源的核心闭环已补齐，完整上游能力仍待接入 |
 | [0004 上游能力与闭环](specs/0004-upstream-capability-completion-plan.md) | 当前分阶段实施计划 | 核心生命周期已有 2026-10-13 交付记录；其余上游能力、来源/参数和平台验证仍待完成 |
 | [0005 项目优化](specs/0005-project-optimization-plan.md) | 结构清理、加载／筛选修正及当前资料清理已实施；其余结构优化为候选 | 2026-10-13 移除退役实现、提取图标／弹窗／基础原生测试，补充现有验证入口；其余模块优化仍为计划 |
-| [0013 创意工坊](specs/0013-skill-workshop.md) | 2026-11-04 设计已确认，首批接入中 | 基于 Codex／Pi 实测推进对话工作台、真实草稿及原安装交接；区分当前首批和待开发的评估／试用／删除保护 |
+| [0013 创意工坊](specs/0013-skill-workshop.md) | 2026-11-05 创建／修改、内置技能、评估及优化已接入 | 四种原版Agent工作台、固定技能资源／检查更新、独立只读报告及对话优化已定向验证／QA打包；Codex 与 Pi 已实测方案和构建，Claude Code 与 Sarvam Code 待实机验证，独立试用／删除保护待完成 |
 | [0009 DSH 原生技能管理补齐](specs/0009-dsh-native-skill-management.md) | 原生管理、通用配置 A—C 及桌面运行包读取已实施并提交 | 上下文检查、声明组合、Profile 覆盖／恢复、四种调用策略及独立文件废纸篓卸载；父 preset／动态只读 |
 | [0012 DSH 设置与原生管理重做方案](specs/0012-dsh-settings-native-skills-rebuild.md) | DSH 配置、完整发现库存、托管/原生独立策略已随 `ec1feb3` 提交；版本反馈 `008a896`、共享筛选 `79b32ef`；各轮定向验证及待用户手测边界保留 |
 | [0007 DeepSeek Harness 技能管理](specs/0007-deepseek-harness-skill-management.md) | 首批完成；完整原生回归通过 | DSH 只读检查、原版通用 CLI 生命周期及增强适配／通用支持分类 |

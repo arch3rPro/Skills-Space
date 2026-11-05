@@ -550,3 +550,120 @@ A/B首个纵向流程已实现，尚未将A/B整批标为完成。删除创作�
 2026-11-05图标区分：创意工坊菜单使用LightbulbIcon，卡片／详情的工作台入口使用AppWindowIcon，demo同步。两者与现有菜单相区别，不变更布局或行为；主Agent一次原QA构建验证，不新增测试或委派。
 
 菜单／工作台图标调整结果：TypeScript／Vite／Rust及原QA打包通过，diff空白检查通过；未提交。
+
+
+## 25. 内置技能与独立评估／优化正式接入（2026-11-05，实施中）
+
+用户确认按独立demo方向实施，demo不作为逐项复制目标。用户任务：技能空间内置Tab查看固定版本、检查并确认更新；工作台通过/调用创建（含修改）、只读评估、优化，明确当前技能和每条消息的资源版本；详情评估Tab独立发起／停止、阅读证据及历史、选择建议带入优化。顶部不提供重复评估／优化按钮。已有会话和用户输入保留。
+
+实现边界：原skills CLI处理技能资源加载，原Agent CLI负责执行。内置创建的官方目录与自有评估／优化技能固定版本及整目录摘要，更新只切换新会话默认资源。旧会话保留已固定资源。评估另开只读会话读取副本，App保存报告和技能版本，不覆盖创作会话；优化单独会话并沿用方案确认，小修改继续对话。报告缺少实际输出不补实际效果分；格式异常保留正文、准确提示，不伪造评分。
+
+固定验证：实现完成后仅委派test_coverage独立审查本轮资源／会话／只读生命周期，拥有必要定向Node检查与唯一QA构建（严格TypeScript和Rust）。模拟原CLI覆盖版本固定／更新失败／旧资源保留，三种技能会话隔离、只读评估源内容不变／停止／异常及报告版本、旧记录读取。预计Node不超过15秒、30秒停止；QA构建预计30–60秒、120秒停止。不跑无关套件、CI、真实模型或安装测试。主Agent核对实际QA内置页、slash入口和评估报告各一次，工具故障仅一次恢复，不因观察失败增加构建。最终产物更新原QA，不提交。
+
+
+第25节结果（2026-11-05）：内置技能Tab、真实固定目录资源及版本检查／确认更新、按资源版本固定的创建与优化会话、独立只读评估、结构化报告／历史／证据和建议带入工作台已接入。官方creator整体目录固定ca45fc496a3436251f191354091d557da31c15b5（18文件），自有evaluator／optimizer各0.1.0，连同manifest共21个资源文件。原版skills use支持本地源，工作台复用它准备固定资源；没有修改原CLI。检查来源以同一不可变commit关联manifest和目录。未发布自有版本的明确空记录为无候选更新，网络／格式失败独立报错。自有资源来源指向项目仓库，已发布更新使用精确commit来源。更新只影响新会话，旧会话继续用其key/hash及支持文件；实际目标目录也检查hash。
+
+创建与普通修改使用creator；optimizer独立会话，明确方案后修改，后续小修改续聊；评估每次独立会话读取源副本，以各Agent只读权限／工具集执行，不覆盖创建身份。App校验结构、分值、证据路径和实际输出是否存在，保存Markdown／JSON记录及源版本；不把缺材料的实际效果算分。评估失败／停止保留部分文本和旧报告。旧报告不冒充新结构化报告，源变化后标明旧内容并不把证据跳到当前变化后的文件。工作台slash支持选择或输入完整命令加空格／回车，消息显示所用技能版本和Agent；方案确认跟随所选技能。
+
+独立审查集中发现并修复：固定目标缓存未校验、资源准备取消未结束完整进程树、历史读取失败永久加载、检查无更新无反馈、优化建议覆盖未发送输入、评估材料在不同创作间共用。现分别为实际目标校验、共享有界进程树终止、历史错误及重试、既有success反馈、追加建议、按draft身份保存在session的表单。
+
+验证限于4个选中Node情景：原四Agent规划／确认／续聊；三技能会话、评估只读／内容不变／结构异常／错误效果分／失败／停止／旧记录；固定资源／更新成功后旧pin可用／失败保留／无发布记录；资源准备进程树取消。首轮6.05秒有3通过，停止检查因要求SIGKILL送达瞬间PID即消失而未过；将预期改为最多500ms等待系统回收，仅重跑该项2.31秒通过，没有修改生产或重跑其余。使用临时HOME、模拟GitHub和Agent，已清理。未执行真实模型、真实远程更新或其他平台。
+
+唯一QA构建通过严格TypeScript、Vite7.26秒、Rust9.17秒；仅既有quick_xml弃用警告。三份workshop脚本及21个内置资源与源字节一致。主Agent在更新后的原QA实际只读观察了内置三项／固定版本、既有工坊记录／会话、slash三技能／选中评估只读提示、详情评估Tab／旧报告提示／评估表单，取消后未执行Agent。结构化新报告和远程更新的真实模型／网络结果留用户手动检查；未操作用户创作或真实偏好保存。截图`/tmp/workshop-builtins-implemented.png`、`/tmp/workshop-skill-picker-implemented.png`、`/tmp/workshop-evaluation-implemented.png`。原QA app已更新，未提交／push。
+
+
+## 26. 工作台对话区重整（2026-11-05，实施中）
+
+用户要求参照主流AI开发环境重设计对话区整体、技能调用和发送操作。范围为共用WorkshopWorkbench、WorkshopSkillPicker及其正式页／demo调用；不改Agent执行、技能版本、报告或文件分栏。参考Codex App技能调用与Cursor官方prompting文档（https://cursor.com/docs/agent/prompting）的输入区上下文选择交互，保留项目既有无外边框／无对话滚动条约束，不增加未接入的模型或附件选择。
+
+用户任务：无需读技术命令即可知道本轮选中技能与Agent；点击当前技能或输入/打开相同菜单，键盘上下选择／Enter或Tab确认／Escape关闭，关闭不丢输入，选中不发送；普通输入Enter发送、Shift+Enter换行、Ctrl/Cmd+Enter兼容，中文组合输入不误发。发送和停止同一位置，不可发送空白或未完成的slash命令；运行时保留可编辑草稿与原停止。已确认方案提供有范围的确认动作，不和普通发送混淆。消息保留作者身份和技能，版本只在悬停查看。
+
+组件：Card新增通用composer变体承载无边框输入面；原Textarea plain、Button、Popover、Hint、AgentLogo、文件区域继续复用。技能菜单统一标签、简短用途、选中状态，命令名留作辅助。不改变既有输入／会话／分栏状态。
+
+固定验证：此轮主Agent直接实现（局部共用对话UI调整，不为此另委派）。先静态核对消费者与中文输入／只读／运行／disabled状态；唯一原QA构建含严格TypeScript和Rust，预计30–60秒／120秒停止，取代另跑前端build。不新增样式测试、不重跑Agent／安装／更新／报告／停止进程套件。实际QA只观察新输入布局、技能菜单键盘确认／Escape保留输入、中文输入框草稿和发送按钮状态，不发送模型请求；清理只作用于自己的界面检查草稿。工具一次恢复／两分钟停止，不以构建替代视觉判断。未提交。
+
+第26节观察中发现明确焦点缺陷：键盘选择后Popover关闭将焦点置于技能按钮，覆盖了此前requestAnimationFrame的输入框聚焦。已改为在Popover的onCloseAutoFocus中处理选中意图，关闭生命周期结束后统一返回输入。此生产变更使原QA产物失效；仅重打同一QA，并重新检查技能选中后输入焦点／Esc保留草稿，其他已过结果不重复，不运行模型。
+
+
+第26节结果：输入区改为无边框composer面，文字在上、技能标签与Agent身份在下，右侧固定圆形上箭头／运行时停止。方案确认在输入面外单独一行，避免和普通发送混淆。消息技能版本移入Hint，保留技能与实际Agent身份；用户消息与文件入口沿用共享样式，移除重复的对话顶部Agent标题。原正式页与独立评估demo共用技能菜单，点击标签或输入/打开同一个菜单，支持上下／Enter／Tab／Escape，关闭不删文本。
+
+打包首次在配置解析时因临时QA文件缺失退出，未编译；恢复原identifier后一次完整QA构建通过。实际观察发现选择焦点被Popover关闭覆盖，修正后原产物失效，再打同一QA，最终严格TypeScript／Vite／Rust通过。没有新增测试、委派或重跑任何Agent／安装／更新／报告测试。
+
+实际原QA窗口已确认：新输入区／菜单布局、上下加Enter切到评估且未发送、关闭完成后焦点回输入框、Escape保留/草稿、中文粘贴与Shift+Enter保留两行、非空发送可用／清空后禁用。只使用“工坊界面检查”自有检查草稿；检查后清空输入，没有操作用户的其他草稿或发模型请求。中文IME组合事件／真实发送／运行中停止本轮仅静态核对，执行层证据复用第25节。保持原文件区和分栏逻辑，没有另跑分栏矩阵。最终实际截图`/tmp/workshop-composer-redesign.png`，原QA已打开，未提交／push。
+
+
+## 27. 正文内一次性技能调用（2026-11-05，已实现）
+
+用户通过askme明确纠正：不显示锁图标、不把“只读检查”等执行约束当UI文案；技能在输入正文的光标位置作为图标＋名称标签，与文字同行，不是底部选择模式。用户已确认仅作用于当前消息，发送成功后清空；失败保留，后续消息不沿用隐藏选择。后台评估只读边界不变。
+
+原Textarea无法容纳原子行内标签，复用现有PopoverAnchor／Content、Button、Badge（新增invocation展示方式）组合为WorkshopPrompt。编辑内容与调用元数据分离：前端草稿用原子占位记录位置，发送前去除占位；显式选择创建或优化时切换会话，普通回复续接最近的创建或优化会话。评估只读执行，报告回到原对话，后续回复继续原来的创作会话。成功发送后清空正文及标签，失败保留。/支持在正文任意词边界调用，选择不自动发送；标签可键盘删除，使用浏览器原生编辑记录保留撤销。正文粘贴限纯文本，不接附件或外部HTML。取消菜单保留文字。已有正文、对话和文件区不迁移。
+
+固定检查：主Agent拥有编译／唯一原QA打包及自有检查草稿的原生界面观察；不新增Agent/安装/更新/后端测试，不发模型。新输入编辑涉及数据保留，另委派一个ui_reviewer仅静态审查输入／选择／删除／撤销／组合输入／一次性范围及失败保留，不执行浏览器／构建或新增测试。集中修复后再打包，实际只核对正文中部插入、删除／撤销、菜单取消和草稿保留；真实发送清空/失败走静态调用链，不启动用户模型。前端首次编译因ES2020不支持replaceAll停止，已改为现有目标支持的字符串处理，不调整tsconfig。未提交。
+
+第27节静态审查三项已集中修正：多行序列化与光标映射共用editorModel；菜单打开时不可发送，Esc后普通斜杠文字可发送且不静默拒绝；新输入框关联键盘说明。原QA实际观察到空原子节点加Portal的二阶段标签渲染在WebKit里使第二行标签落到文字之后，前后正文仍保留。改用React静态渲染共享Badge和图标生成可信标签，一次插入原生编辑事务，移除Portal后二次DOM更新。此已观察缺陷使原包失效，仅补同一QA与多行标签插入／删除／撤销检查，不扩大模型或其他测试。
+
+第27节第二次观察：完整标签已在第二行与前后文字同行；删除时又观察到WebKit编辑将标签内容当普通文字删除、而调用元数据仍在。修复统一编辑入口的原子约束：每次原生输入／撤销后恢复token的contentEditable=false、标签内容由已知技能身份生成，并把误入标签内部的光标放回整体边界。仅修这一已观察缺陷并重打同一QA，保留其他已过检查，不扩展其他测试。
+
+第27节最终结果：严格TypeScript、Vite、Rust及原QA打包通过。原生QA实际观察了正文第二行中部插入完整技能标签、前后文字保留、整体删除及撤销恢复、Esc取消保留普通斜杠文字；最终重新观察确认菜单已关闭，输入区只有同行图标／技能名与正文，无锁、只读说明或底部技能模式。菜单关闭过渡期间的快照曾显示旧选项，稳定状态与截图确认已消失，没有为此另改实现或重建。检查仅使用自建“工坊界面检查”记录，未发送模型消息；截图保存后已清空该检查草稿，发送按钮恢复禁用。成功发送后清空与失败保留按前端调用链静态核对，本轮未实际触发Agent。最终截图`/tmp/workshop-inline-skill-final.png`，原QA应用已更新；未提交／push。
+
+
+## 28. 更换评估智能体的只读读取与结果状态修复（2026-11-05，实施中）
+
+用户任务：评估可选择四种支持的智能体，不改变创作智能体／会话。允许列目录、搜索、读取规则和技能；禁止修改、执行技能脚本／任务、安装等行为。评估失败返回具体可用反馈和原返回内容，不算成功，不覆盖上次有效报告；旧的complete＋resultError记录同样不能冒充有效评分。后台保持独立快照、原CLI与源哈希验证，评估资源补丁版本0.1.1。
+
+固定轻量检查：仅扩展既有workshop角色隔离情景，覆盖四Agent只读读取配置及读取内容、切换评估身份、无效／失败报告保留旧有效报告、源hash和创作会话不变。test_coverage独立审查结果状态／读取约束，拥有定向Node执行与唯一原QA构建；Node预计10秒／30秒停止，QA预计30–60秒／120秒停止，包含TypeScript与Rust，不再单独前端build。ui_reviewer仅静态核对评估失败／历史报告／重试，无UI自动化或模型调用，不新建组件。集中修复后打包一次，用户手动检查原QA，不提交／push。未安装的Claude Code／Sarvam Code只验证原协议模拟，不声称真实模型通过。
+
+第28节实现及审查：Codex保持exec --sandbox read-only，Sarvam保持app-server及thread/start的read-only／never；两者提示词明确允许只读列目录、搜索与读取。Pi仅开放read／grep／find／ls并禁扩展；Claude仅开放Read／Glob／Grep。没有改变用户CLI或放开写权限。官方接口参考：[Codex安全说明](https://developers.openai.com/codex/security/)、[Claude CLI](https://code.claude.com/docs/en/cli-reference)、[Pi CLI](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/cli.md)；Sarvam复用第23节固定官方扩展协议，不另猜测参数。评估器补丁0.1.1明确只读文件命令与禁止执行被评技能脚本的区别。
+
+后台只有解析有效且有材料支撑的评分才完成并更新review/report.md；否则记录failed、保留本次返回内容和原错误，上次有效报告不变。界面排除旧complete＋resultError，失败信息按run身份关联，准备失败无正文也可查看折叠错误详情；旧版报告仍可查看，无有效报告的失败不出现重复新手操作。复用FlowError／Modal／Button，未新增页面或组件。两位审查集中发现并修复了旧错误串用、旧报告被隐藏、重复重试入口和准备失败原因不可查；静态复核通过。
+
+定向Node结果：仅两个选中情景，5.69秒通过，使用隔离HOME和模拟CLI。四Agent模拟进程实际读取规则、SKILL.md、引用资源，核对工具／只读参数和Sarvam thread策略，切换后创作会话及源hash不变；无效评分／虚构实际效果／执行失败／停止均不覆盖有效报告，部分返回内容仍可读取。未运行真实模型、本机未安装的Claude／Sarvam原CLI或其他平台。UI仅静态复核，渲染与真实评估按用户要求留手动检查。
+
+第28节交付：唯一原QA构建21.55秒通过（严格TypeScript、Vite7.40秒、Rust5.79秒），包内workshop.mjs、evaluator SKILL.md和manifest与源一致，版本0.1.1；diff空白检查通过，仅既有chunk体积／quick_xml弃用警告。已通过原生应用操作关闭旧进程并重新打开同一个QA包，观察到新启动的技能空间页面；没有发起用户评估或修改创作。日志/tmp/workshop-evaluation-readonly-build.log。真实Agent评估与失败界面渲染留用户手动检查，未提交／push。
+
+
+## 29. Reuse the Skill Space inventory and details for built-in skills
+
+The reference flow is the managed/native inventory in App.tsx. The built-in tab uses its search, refresh and update-check controls, loading and empty states, card grid, openDetail request lifecycle, version display, document view and back navigation. The built-in adapter supplies bundled identity, publisher, version and the built-in read/check/update commands. Installed-skill mutations are available only on the installed-skill path.
+
+Acceptance covers opening the built-in tab, searching and clearing a no-match query, opening a card, reading its version/document, returning to the same tab, and reaching the built-in update review from an available update. The managed/native branches retain their existing actions. Verify with source review and the required frontend build.
+
+Verified in the rebuilt macOS QA app: the built-in tab showed the shared toolbar and card controls, searching for 技能评估 filtered the list, opening the card showed version 0.1.1 and Preview/Source, and Back retained the tab and query. Independent source review verified the update routing and absence of installed-skill mutation actions. The QA build passed; a live update was not run.
+
+Built-in details use the declared skill name as the title. The shared metadata grid shows the active version, publisher and current resource location. The shared directory link displays the active path with the home prefix replaced by `~`, truncates long paths, reveals the full display path in its tooltip, and opens the actual directory. Metadata uses icons and text values, with field names available on hover or focus where needed. License and compatibility use the active document's declarations. The bundled creator's manifest supplies its packaged Apache-2.0 license when the document omits a declaration.
+
+评估 Tab 的结构化报告先展示结论与技能质量、实际效果两项评分；未提供实际输出时显示「未评估」。问题和建议在评分下方，分项评分和问题依据按需展开。勾选的问题可带入工作台继续优化。
+
+## 30. 创意工坊持续优化
+
+优化 Tab 打开候选工作台并预选技能优化。每轮从前一轮候选开始，保留初始版本作为固定对照。确认方案后写入候选，完成后使用现有只读评估生成结构评分，历史轮次可回看。应用前确认原技能和候选与查看时一致。用户可结束优化并保留记录。实际效果可提交同一组用例、预期和两份实际输出，由只读评估分别评分并展示逐项结果。由应用实际运行测试用例的流程尚待接入。
+
+方案就绪后，工作台输入区上方同时提供「查看方案」和执行按钮。可以直接执行、打开文件核对或继续对话调整，执行时仍校验方案内容。候选生成后，对话末尾提供「查看优化结果」，应用操作集中在结果页。应用只确认一次；成功后保留轮次及其对话，可从优化 Tab 或历史对话继续。历史轮次支持查看结果和原对话。过期评估保留评分，在评估人和时间旁标记「待重新评估」。
+
+真实流程验证使用隔离目录和实际 Codex CLI。创建一份 Markdown 标题技能后完成只读评估，在同一优化对话中回答大小写规则的澄清问题并确认方案。候选只修改 SKILL.md，基线和候选均获得 60/60 结构评分。应用前原技能内容一致，确认应用后原技能与候选一致。QA 应用另行核对历史对话中的继续入口。
+
+### 对话交互参考
+
+- 方案确认是本轮可执行的操作，适合和可选的方案预览放在一起。应用候选会更新当前技能，在结果页保留一次明确确认。参考 [Codex 方案模式](https://developers.openai.com/blog/run-long-horizon-tasks-with-codex)。
+- 对话进行中显示任务进度。同一轮内先于最终答复收到的独立 Agent 消息保存在「过程记录」，可展开回看。保留回复和文件入口；不展示模型的内部推理或原始命令流。参考 [VS Code 的工具调用分组](https://code.visualstudio.com/docs/agents/run/tools)。
+- 早期 QA 使用 Markdown 选项回填输入框。该实现已由下文的 Codex 原生问答取代，已有对话仍可阅读。参考 [Claude Code 的方案澄清](https://code.claude.com/docs/zh-CN/agent-sdk/permissions)。
+
+本轮定向检查仅更新一个 macOS QA 包。用独立标题生成技能从界面应用已有真实 Codex 候选，只出现一次「应用此版本？」；应用后源技能目录和候选一致。旧轮次可打开原始对话，继续优化可输入并成功发送给 Codex。实测文件区保持关闭时可点击「按方案优化」启动执行。评估页显示「待重新评估」与「重新评估」按钮。
+
+### 对话决策与当轮变更
+
+方案作为对话卡保留，当前版本可直接执行或继续修改。发送修改意见后，旧方案不能再执行。新方案就绪后重新确认。执行过程和耗时留在原轮次。写入前后的文件快照用于当轮差异，优化结果沿用固定基线展示累计变更。应用前仍检查原技能和候选版本。
+
+Codex 桌面端规划通过原版 App Server 收发原生问答，使用只读权限。问题在输入区上方显示，提交回到原请求。请求确认结束后在对话中记录问题和答案。其他 Agent 的追问继续使用普通对话。
+
+定向检查范围为工坊现有协议、创建与优化回归，原生问答请求与回执、只读限制、方案更新和差异范围。只构建一个 QA 包。
+
+macOS QA 已用隔离标题技能和原版 Codex 实测。问答提交后问题和答案保留在对话中，继续生成方案。修改意见使旧方案失去执行入口，新方案确认后写入候选。本轮差异只新增 Forest trail，累计差异还包含上一轮的 Alpine lake。候选通过一次确认应用，源技能与候选目录一致，随后可继续输入。首次桌面验收发现续接会话仍保持计划模式，已修正为在原版 App Server 中明确切换规划和执行模式。用原 QA 草稿恢复同一待确认方案后验证修复。定向回归覆盖无改动执行、停止后拒绝旧问答和既有只读评估。未提交。
+
+问答面板使用编号选项，自由回答与发送并排。执行记录保留于原消息，内部方案标记不计为过程。展开过程后，每条执行状态与命令同一行，长命令省略，输出默认收起并可单独展开，展开区仅显示输出。等待 Agent 回复时显示「思考中」，工具执行和停止沿用独立状态。
+
+当前回复的过程组默认展开，单条输出仍默认折叠。「思考中」位于该回复内，历史过程可按原回合展开。方案需要调整时直接在输入框发送意见。
+
+Agent 回复顶部每秒更新「已处理」时长，结束后同位置显示固定用时。有过程记录时，计时即为展开入口。命令有无输出共用行高与左侧间距，仅有输出的命令提供展开按钮。
+
+macOS QA 实测 Pi：只读工具记录支持实时计时和折叠，方案确认后生成测试 SKILL.md，并可打开单文件差异。构建期间的 Pi RPC 单向扩展通知不需要应答，真实交互请求仍提示在终端处理。定向协议回归与 QA 构建通过。Claude Code 和 Sarvam Code 仅完成模拟协议检查，真实模型回合待验证。
