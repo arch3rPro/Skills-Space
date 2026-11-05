@@ -37,10 +37,12 @@ export function sarvamTurn({ session, cwd, planning, instruction, write, end, on
       switch (message.method) {
         case 'turn/started': turnId = event.turn?.id; break;
         case 'item/agentMessage/delta': onEvent({ delta: event.delta || '' }); break;
-        case 'item/started': onEvent({ activity: event.item?.type === 'commandExecution' ? event.item.command || '' : event.item?.type === 'fileChange' ? 'Updating files' : '' }); break;
+        case 'item/started':
+          if(['commandExecution','fileChange'].includes(event.item?.type))onEvent({tool:{id:event.item.id,label:event.item.command??'File changes',status:event.item.status??'inProgress'}});
+          break;
         case 'item/completed':
           if (event.item?.type === 'agentMessage' && typeof event.item.text === 'string') onEvent({ text: event.item.text, final: true });
-          else onEvent({ activity: '' });
+          else if(['commandExecution','fileChange'].includes(event.item?.type))onEvent({tool:{id:event.item.id,label:event.item.command??'File changes',status:event.item.status,output:event.item.aggregatedOutput}});
           break;
         case 'turn/completed':
           if (event.turn?.id && turnId && event.turn.id !== turnId) return;

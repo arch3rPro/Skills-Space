@@ -23,7 +23,10 @@ copyFileSync(resolve("scripts/inspect-eve.mjs"), `${destination}/inspect-eve.mjs
 copyFileSync(resolve("scripts/inspect-upstream-plugins.mjs"), `${destination}/inspect-upstream-plugins.mjs`);
 copyFileSync(resolve("scripts/inspect-upstream-discovery.mjs"), `${destination}/inspect-upstream-discovery.mjs`);
 copyFileSync(resolve("scripts/inspect-upstream-provider.mjs"), `${destination}/inspect-upstream-provider.mjs`);
+copyFileSync(resolve("scripts/workshop-builtins.mjs"), `${destination}/workshop-builtins.mjs`);
+cpSync(resolve("scripts/builtin-skills"), `${destination}/builtin-skills`, {recursive:true});
 copyFileSync(resolve("scripts/workshop.mjs"), `${destination}/workshop.mjs`);
+copyFileSync(resolve("scripts/workshop-codex.mjs"), `${destination}/workshop-codex.mjs`);
 copyFileSync(resolve("scripts/workshop-sarvam.mjs"), `${destination}/workshop-sarvam.mjs`);
 copyFileSync(resolve("scripts/run-upstream-use.mjs"), `${destination}/run-upstream-use.mjs`);
 copyFileSync(resolve("scripts/inspect-upstream-source.mjs"), `${destination}/inspect-upstream-source.mjs`);

@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 pub(super) fn revision(signature: &[u8]) -> String {
     format!("{:x}", Sha256::digest(signature))
 }
-fn files(mut signature: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, String> {
+pub(super) fn files(mut signature: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, String> {
     let mut result = BTreeMap::new();
     fn take<'a>(input: &mut &'a [u8]) -> Result<&'a [u8], String> {
         let length = input.get(..8).ok_or("Invalid content signature.")?;
@@ -98,7 +98,7 @@ pub(super) fn compare(
         files: compare_files(engine, original, current)?,
     })
 }
-fn compare_files(
+pub(super) fn compare_files(
     engine: &Engine,
     original: BTreeMap<String, Vec<u8>>,
     current: BTreeMap<String, Vec<u8>>,

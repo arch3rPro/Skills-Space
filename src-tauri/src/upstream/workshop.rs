@@ -13,9 +13,12 @@ fn request(app: &AppHandle, action: &str, input: Value) -> Result<(Engine, Value
     for path in &settings.workshop_history_paths { bases.push(crate::preferences::workshop_path(Some(path), &engine.home)?); }
     let mut value = input.as_object().cloned().ok_or("Invalid workshop request.")?;
     value.insert("action".into(), json!(action));
+    value.insert("nativeQuestions".into(), json!(true));
     value.insert("base".into(), json!(base));
     value.insert("bases".into(), json!(bases));
     value.insert("home".into(), json!(engine.home));
+    value.insert("builtinHome".into(), json!(engine.home.join(".skills-space").join("builtin-skills")));
+    value.insert("builtins".into(), json!(engine.resources.join("builtin-skills")));
     value.insert("cli".into(), json!(engine.resources.join("skills/bin/cli.mjs")));
     value.insert("parentPid".into(), json!(std::process::id()));
     value.insert("activeId".into(), json!(ACTIVE.lock().map_err(|_| "Workshop state is unavailable.")?.clone()));
@@ -43,14 +46,14 @@ struct WorkshopDocumentMetadata {
 }
 
 // Reuse the existing upstream frontmatter reader; no folder hashing or second parser.
-fn enrich_metadata(engine: &Engine, result: &mut Value, hash: bool) -> Result<(), String> {
+fn enrich_metadata(engine: &Engine, result: &mut Value, hash: bool, directory_field: &str) -> Result<(), String> {
     let mut drafts: Vec<&mut Value> = match result {
         Value::Array(items) => items.iter_mut().collect(),
         Value::Object(_) => vec![result],
         _ => return Ok(()),
     };
     for draft in &mut drafts { draft["metadata"] = Value::Null; }
-    let paths: Vec<String> = drafts.iter().filter_map(|draft| draft["skillDirectory"].as_str().map(str::to_owned)).collect();
+    let paths: Vec<String> = drafts.iter().filter_map(|draft| draft[directory_field].as_str().map(str::to_owned)).collect();
     if paths.is_empty() { return Ok(()); }
     let mut command = engine.command(&engine.node, &engine.home);
     command.arg(engine.resources.join("inspect-skill-documents.mjs"))
@@ -60,7 +63,7 @@ fn enrich_metadata(engine: &Engine, result: &mut Value, hash: bool) -> Result<()
     if !output.success { return Err(format!("Cannot read workshop skill metadata: {}", output.stderr)); }
     let metadata: Vec<WorkshopDocumentMetadata> = serde_json::from_str(&output.stdout).map_err(|e| e.to_string())?;
     for draft in drafts {
-        let document = draft["skillDirectory"].as_str().and_then(|path| metadata.iter().find(|document| document.document.path == path));
+        let document = draft[directory_field].as_str().and_then(|path| metadata.iter().find(|document| document.document.path == path));
         draft["metadata"] = document.map(|document| json!({
             "name": document.document.name, "description": document.document.description, "error": document.document.error,
             "version": document.version, "hash": document.document.hash, "license": document.license, "compatibility": document.compatibility,
@@ -72,8 +75,18 @@ fn enrich_metadata(engine: &Engine, result: &mut Value, hash: bool) -> Result<()
 #[tauri::command]
 pub async fn workshop_command(app: AppHandle, action: String, input: Value) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        if !matches!(action.as_str(), "agents" | "list" | "read" | "detail" | "document" | "create" | "update" | "open" | "stop" | "send") {
+        if !matches!(action.as_str(), "builtins" | "builtin-detail" | "builtin-check" | "builtin-update" | "agents" | "list" | "read" | "detail" | "document" | "create" | "update" | "open" | "stop" | "answer" | "diff" | "send" | "optimization-start" | "optimization-open" | "optimization-apply" | "optimization-end") {
             return Err("Unknown workshop action.".into());
+        }
+        if action.starts_with("optimization-") {
+            {
+                let mut active = ACTIVE.lock().map_err(|_| "Workshop state is unavailable.")?;
+                if active.is_some() { return Err("Wait for the current workshop task to finish.".into()); }
+                *active = Some(String::new());
+            }
+            let result = request(&app, &action, input).and_then(|(engine, value)| call(&engine, &value));
+            *ACTIVE.lock().map_err(|_| "Workshop state is unavailable.")? = None;
+            return result;
         }
         if action == "send" {
             let id = input["id"].as_str().ok_or("Choose a workshop draft.")?.to_owned();
@@ -95,13 +108,25 @@ pub async fn workshop_command(app: AppHandle, action: String, input: Value) -> R
             });
             return Ok(Value::Null);
         }
+        if action == "diff" {
+            let (engine, value) = request(&app, "diff-paths", input)?;
+            let paths = call(&engine, &value)?;
+            let snapshot = |name: &str| -> Result<_, String> {
+                let path = paths[name].as_str().ok_or("Missing comparison directory.")?;
+                let signature = tree_signature(Path::new(path)).ok_or("Files exceed the diff preview limit or could not be read.")?;
+                super::document_diff::files(&signature)
+            };
+            let files = super::document_diff::compare_files(&engine, snapshot("before")?, snapshot("after")?)?;
+            return serde_json::to_value(super::document_diff::SkillDiff {revision:String::new(), version:String::new(), files}).map_err(|error|error.to_string());
+        }
         if action == "stop" {
             let active = ACTIVE.lock().map_err(|_| "Workshop state is unavailable.")?.clone();
             if input["id"].as_str() != active.as_deref() || active.is_none() { return Err("This workshop task is no longer running.".into()); }
         }
         let (engine, value) = request(&app, if action == "open" { "directory" } else { &action }, input)?;
         let mut result = call(&engine, &value)?;
-        if matches!(action.as_str(), "list" | "read" | "detail" | "create" | "update") { enrich_metadata(&engine, &mut result, action == "detail")?; }
+        if matches!(action.as_str(), "list" | "read" | "detail" | "create" | "update") { enrich_metadata(&engine, &mut result, action == "detail", "skillDirectory")?; }
+        if matches!(action.as_str(), "builtins" | "builtin-detail" | "builtin-update") { enrich_metadata(&engine, &mut result, false, "directory")?; }
         if action == "open" {
             use tauri_plugin_opener::OpenerExt;
             let path = result.as_str().ok_or("Workshop directory is unavailable.")?;
