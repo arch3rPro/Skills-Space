@@ -158,3 +158,5 @@ Third-party registries, blocks and additional themes are outside this official U
 2026-11-04 workbench redesign: Button adds a navigation variant for compact rectangular file rows and aria-current selection; existing variants are unchanged. Workshop composes it with Collapsible instead of the application SidebarMenu. The conversation/files split and the inner preview/tree split use Resizable with independent bounds; no new registry component or dependency was installed.
 
 2026-11-04 workshop file controls: shared Button/Hint actions provide open-folder, refresh and close; preview uses the reusable subtle-scrollbar utility based on the existing native page scroller. Creation metadata edits use the existing Modal/Field composition and keep generated skill documents unchanged. No new component or dependency.
+
+2026-11-05 conversation composition: Card adds the borderless semantic composer variant; Button navigation supports data-highlighted for keyboard skill selection. Workbench uses existing Textarea plain, Popover, Hint and Button for the selected skill, keyboard menu and unified send/stop position; no new dependency.
