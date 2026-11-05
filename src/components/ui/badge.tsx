@@ -23,7 +23,7 @@ const badgeVariants = cva(
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
-      presentation: { pill: "", status: "gap-1.5 rounded-none border-0 bg-transparent px-0 font-normal before:size-1.5 before:shrink-0 before:rounded-full before:bg-current" },
+      presentation: { invocation: "h-auto rounded-none border-0 px-0 py-0 align-baseline text-sm", pill: "", status: "gap-1.5 rounded-none border-0 bg-transparent px-0 font-normal before:size-1.5 before:shrink-0 before:rounded-full before:bg-current" },
     },
     defaultVariants: {
       variant: "default",

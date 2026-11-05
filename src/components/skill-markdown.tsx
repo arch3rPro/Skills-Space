@@ -19,7 +19,7 @@ function MarkdownCodeBlock({ node, children }: ComponentProps<"pre"> & ExtraProp
   if (!element) return <pre>{children}</pre>;
   return <SkillCodeBlock code={code} language={language} />;
 }
-export function SkillCodeBlock({ code, language = '', zh: languageZh, wrap = false }: { code: string; language?: string; zh?: boolean; wrap?: boolean }) {
+export function SkillCodeBlock({ code, language = '', zh: languageZh, wrap = true }: { code: string; language?: string; zh?: boolean; wrap?: boolean }) {
   const { zh: contextZh } = useContext(DocumentContext);
   const zh = languageZh ?? contextZh;
   const lines = useHighlightedCode(code, language);
