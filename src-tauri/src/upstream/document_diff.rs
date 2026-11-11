@@ -156,7 +156,10 @@ pub(super) fn compare_files(
             "b",
         ])
         .output()
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::NotFound => "Install Git and restart Skills Space to view file changes.".to_owned(),
+            _ => error.to_string(),
+        })?;
     if !matches!(output.status.code(), Some(0 | 1)) {
         return Err(String::from_utf8_lossy(&output.stderr).into_owned());
     }

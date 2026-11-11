@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, chmod, copyFile, stat, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { contentHash } from './workshop-builtins.mjs';
 import { command, createDraft, readDraft, readDocument, runTurn, launcher, agentCommands } from './workshop.mjs';
@@ -23,7 +23,7 @@ appendFileSync(join(process.cwd(),'.creator-preparations'),'use\\n');
 process.stdout.write('Selected skill: '+name+'\\nSupporting files for this skill were downloaded to:\\n'+dir+'\\n');`);
   const body = '#!'+process.execPath+'\n'+String.raw`
 const fs=require('node:fs'),path=require('node:path');
-const args=process.argv.slice(2),name=path.basename(process.argv[1]),pi=name==='pi',claude=name==='claude',sarvam=name==='sarvam-code';
+const args=process.argv.slice(2),name=path.basename(process.argv[1],'.cjs'),pi=name==='pi',claude=name==='claude',sarvam=name==='sarvam-code';
 const session='00000000-0000-4000-8000-000000000001';
 const mode=fs.existsSync('.test-mode')?fs.readFileSync('.test-mode','utf8'):'normal';
 let hold,threadId=session,turnId='turn-1',threadPolicy;
@@ -97,7 +97,16 @@ else if(message.method==='turn/start'){
 if(pi||sarvam||appServer){let input='';process.stdin.on('data',chunk=>{input+=chunk;let split;while((split=input.indexOf('\n'))>=0){const line=input.slice(0,split);input=input.slice(split+1);if(line.trim())(sarvam||appServer)?rpc(JSON.parse(line)):respond(JSON.parse(line).message);}});process.stdin.on('end',()=>clearInterval(hold));}
 else{let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',chunk=>input+=chunk);process.stdin.on('end',()=>respond(input));}
 `;
-  for(const name of ['codex','pi','claude','sarvam-code']) {const file=join(context.bin,name);await writeFile(file,body);await chmod(file,0o755);}
+  for (const name of ['codex','pi','claude','sarvam-code']) {
+    if (process.platform === 'win32') {
+      await writeFile(join(context.bin,name+'.cjs'),body);
+      await writeFile(join(context.bin,name+'.cmd'),`@echo off\r\nnode "%dp0%\\${name}.cjs" %*\r\n`);
+    } else {
+      const file=join(context.bin,name);
+      await writeFile(file,body);
+      await chmod(file,0o755);
+    }
+  }
   return cli;
 }
 async function waitFor(path,limit=3000) {
@@ -171,9 +180,17 @@ test('draft records reread real files, preserve external edits and reject outsid
   assert(badBody.contentError);assert.equal(badBody.report,'# Healthy report');assert.equal(badBody.reportError,null);
 });
 
-test('all supported Agent protocols plan read-only, confirm exact content and preserve conversation on build', {skip:process.platform==='win32'},async t=>{
+test('all supported Agent protocols plan read-only, confirm exact content and preserve conversation on build',async t=>{
   const context=await isolated(t),cli=await fakeAgents(context),oldPath=process.env.PATH;
-  process.env.PATH=context.bin;t.after(()=>{process.env.PATH=oldPath;});
+  process.env.PATH=[context.bin,oldPath].filter(Boolean).join(delimiter);
+  t.after(()=>{process.env.PATH=oldPath;});
+  if (process.platform === 'win32') {
+    const incompatible=join(context.root,'incompatible');
+    await mkdir(incompatible);
+    await writeFile(join(incompatible,'pi.cmd'),'@echo unsupported');
+    const pi=(await agentCommands(context.home,[incompatible,context.bin].join(delimiter))).find(agent=>agent.id==='pi');
+    assert.equal(pi.path,join(context.bin,'pi.cmd'));
+  }
   for(const agent of ['codex','pi','claude-code','sarvam-code']) {
     const draft=await createDraft(context.base,userInput(agent));
     const request={base:context.base,home:context.home,cli,id:draft.id,kind:'plan',message:draft.brief};
@@ -218,6 +235,22 @@ test('all supported Agent protocols plan read-only, confirm exact content and pr
   const npmScript=join(context.bin,'node_modules','fake-agent','cli.js');await mkdir(join(context.bin,'node_modules','fake-agent'),{recursive:true});await writeFile(npmScript,'// command shim target');
   const shim=join(context.bin,'codex.cmd');await writeFile(shim,'@echo off\n"%_prog%" "%dp0%\\node_modules\\fake-agent\\cli.js" %*\n');
   const launch=await launcher(shim,['exec','-']);assert.equal(launch.command,process.execPath);assert.deepEqual(launch.args,[npmScript,'exec','-']);
+});
+
+test('workshop metadata reads long Unicode path lists from stdin',async t=>{
+  const context=await isolated(t);
+  const directory=join(context.root,'技能目录 with spaces');
+  await mkdir(directory);
+  await writeFile(join(directory,'SKILL.md'),'---\nname: example\ndescription: Test metadata\n---\n');
+  const paths=Array(1000).fill(directory);
+  assert(JSON.stringify(paths).length>32767);
+  const result=spawnSync(process.execPath,[resolve('src-tauri/resources/upstream/inspect-skill-documents.mjs'),'--stdin','--metadata-only'],{
+    input:JSON.stringify(paths),encoding:'utf8',timeout:10000,
+  });
+  assert.equal(result.status,0,result.stderr||String(result.error));
+  const rows=JSON.parse(result.stdout);
+  assert.equal(rows.length,paths.length);
+  assert(rows.every(row=>row.path===directory&&row.name==='example'));
 });
 
 test('a provider error or process exit without completion cannot become a successful plan', {skip:process.platform==='win32'},async t=>{

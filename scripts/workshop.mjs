@@ -164,11 +164,26 @@ async function optimizationAction(request) {
 }
 
 export async function agentCommands(home, pathValue = process.env.PATH ?? '') {
-  const paths = [...new Set([...pathValue.split(delimiter), join(home,'.local/bin'), join(home,'.cargo/bin'), '/opt/homebrew/bin', '/usr/local/bin'])];
+  const windows = process.platform === 'win32';
+  const userBins = windows
+    ? [process.env.APPDATA && join(process.env.APPDATA,'npm'), join(home,'AppData','Roaming','npm'), join(home,'.local','bin')]
+    : [join(home,'.local/bin'), join(home,'bin'), join(home,'.cargo/bin'), join(home,'.npm-global/bin'),
+      join(home,'.bun/bin'), join(home,'.volta/bin'), join(home,'.local/share/pnpm'), '/usr/local/bin',
+      ...(process.platform === 'darwin' ? ['/opt/homebrew/bin'] : [])];
+  const paths = [...new Set([...pathValue.split(delimiter).filter(Boolean), ...userBins.filter(Boolean)])];
   return Promise.all(AGENTS.map(async ({id,name:label,command}) => {
     for (const path of paths) {
-      for(const name of process.platform==='win32'?[`${command}.exe`,`${command}.cmd`]:[command]){const candidate=join(path,name);
-      try { const info = await stat(candidate); if (info.isFile() && (process.platform === 'win32' || info.mode & 0o111)) return { id, name:label, available: true, path: candidate }; } catch (e) { if (!['ENOENT','ENOTDIR'].includes(e.code)) throw e; }}
+      for (const name of windows ? [`${command}.exe`, `${command}.cmd`] : [command]) {
+        const candidate = resolve(path,name);
+        try {
+          const info = await stat(candidate);
+          if (!info.isFile() || (!windows && !(info.mode & 0o111))) continue;
+          if (windows && name.endsWith('.cmd') && !await npmLauncherTarget(candidate)) continue;
+          return { id, name:label, available: true, path: candidate };
+        } catch (error) {
+          if (!['ENOENT','ENOTDIR','EACCES','EPERM'].includes(error.code)) throw error;
+        }
+      }
     }
     return { id, name:label, available: false, path: null };
   }));
@@ -219,13 +234,22 @@ export function agentArguments(agent, record, planning=false) {
   return ['exec','--sandbox',planning?'read-only':'workspace-write','--json','--skip-git-repo-check', ...(record.session ? ['resume',record.session,'-'] : ['-'])];
 }
 function stopProcess(child) {if(!child?.pid||stopping.has(child))return;stopping.set(child,terminateProcessTree(child));}
+async function npmLauncherTarget(command) {
+  const shim = await readFile(command,'utf8');
+  const match = shim.match(/"%dp0%[\\/]([^"\r\n]+\.(?:[cm]?js))"/i);
+  if (!match) return null;
+  const script = resolve(dirname(command),match[1].replace(/\\/g,'/'));
+  try {
+    return (await stat(script)).isFile() ? script : null;
+  } catch (error) {
+    if (['ENOENT','ENOTDIR'].includes(error.code)) return null;
+    throw error;
+  }
+}
 export async function launcher(command,args) {
-  if(!command.toLowerCase().endsWith('.cmd'))return {command,args};
-  const shim=await readFile(command,'utf8');
-  const match=shim.match(/"%dp0%[\\/]([^"\r\n]+\.(?:m?js))"/i);
-  if(!match)throw new Error('The Agent launcher is not a supported npm command shim.');
-  const script=resolve(dirname(command),match[1].replace(/\\/g,'/'));
-  if(!(await lstat(script)).isFile())throw new Error('The Agent launcher target is missing.');
+  if (!command.toLowerCase().endsWith('.cmd')) return {command,args};
+  const script = await npmLauncherTarget(command);
+  if (!script) throw new Error('The Agent launcher is not a supported npm command shim or its target is missing.');
   return {command:process.execPath,args:[script,...args]};
 }
 function agentEnvironment() {

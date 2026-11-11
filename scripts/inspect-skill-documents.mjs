@@ -48,7 +48,13 @@ const {parseFrontmatter, sanitizeMetadata} = runInNewContext(
     + "\n({parseFrontmatter,sanitizeMetadata});", {parse}, {timeout:1000});
 
 const metadataOnly = process.argv.includes("--metadata-only");
-const paths = JSON.parse(process.argv[2]);
+let input = process.argv[2];
+if (input === "--stdin") {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  input = Buffer.concat(chunks).toString("utf8");
+}
+const paths = JSON.parse(input);
 if (!Array.isArray(paths) || paths.length > 2000 || paths.some((path) => typeof path !== "string")) throw new Error("Document inspection exceeds limits.");
 const results = [];
 for (const path of paths) {

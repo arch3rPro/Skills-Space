@@ -74,6 +74,10 @@ jobs:
         run: pnpm stage:upstream
       - name: Frontend contract tests
         run: pnpm test:frontend-contracts
+      - name: Workshop cross-platform checks
+        if: runner.os == 'Windows' || runner.os == 'Linux'
+        timeout-minutes: 2
+        run: node --test --test-name-pattern='all supported Agent protocols|workshop metadata reads' scripts/workshop.test.mjs
       - name: Compile native tests
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target "${{ matrix.target }}" --lib --no-run --message-format=json > "$RUNNER_TEMP/native-tests.jsonl"
       - name: Run selected native checks (before packaging)

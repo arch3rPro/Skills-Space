@@ -25,8 +25,11 @@ fn request(app: &AppHandle, action: &str, input: Value) -> Result<(Engine, Value
     Ok((engine, Value::Object(value)))
 }
 fn call(engine: &Engine, request: &Value) -> Result<Value, String> {
+    call_helper(engine, "workshop.mjs", &[], request)
+}
+fn call_helper<T: serde::Serialize, R: serde::de::DeserializeOwned>(engine: &Engine, script: &str, args: &[&str], request: &T) -> Result<R, String> {
     let mut child = engine.command(&engine.node, &engine.home)
-        .arg(engine.resources.join("workshop.mjs"))
+        .arg(engine.resources.join(script)).args(args)
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
         .spawn().map_err(|e| e.to_string())?;
     let bytes = serde_json::to_vec(request).map_err(|e| e.to_string())?;
@@ -55,13 +58,11 @@ fn enrich_metadata(engine: &Engine, result: &mut Value, hash: bool, directory_fi
     for draft in &mut drafts { draft["metadata"] = Value::Null; }
     let paths: Vec<String> = drafts.iter().filter_map(|draft| draft[directory_field].as_str().map(str::to_owned)).collect();
     if paths.is_empty() { return Ok(()); }
-    let mut command = engine.command(&engine.node, &engine.home);
-    command.arg(engine.resources.join("inspect-skill-documents.mjs"))
-        .arg(serde_json::to_string(&paths).map_err(|e| e.to_string())?);
-    if !hash { command.arg("--metadata-only"); }
-    let output = run_process(&mut command)?;
-    if !output.success { return Err(format!("Cannot read workshop skill metadata: {}", output.stderr)); }
-    let metadata: Vec<WorkshopDocumentMetadata> = serde_json::from_str(&output.stdout).map_err(|e| e.to_string())?;
+    let mut args = vec!["--stdin"];
+    if !hash { args.push("--metadata-only"); }
+    let metadata: Vec<WorkshopDocumentMetadata> =
+        call_helper(engine, "inspect-skill-documents.mjs", &args, &paths)
+            .map_err(|error| format!("Cannot read workshop skill metadata: {error}"))?;
     for draft in drafts {
         let document = draft[directory_field].as_str().and_then(|path| metadata.iter().find(|document| document.document.path == path));
         draft["metadata"] = document.map(|document| json!({
