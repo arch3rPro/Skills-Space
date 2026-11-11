@@ -7,6 +7,8 @@
   "scripts": {
     "build": "pnpm run stage:upstream && tsc && vite build",
     "dev": "vite",
+    "dev:dsh": "node scripts/dsh-companion-dev.mjs",
+    "dev:dsh:clean": "node scripts/dsh-clean-environment.mjs",
     "test:frontend-contracts": "pnpm run test:upstream && pnpm run test:appearance && pnpm run test:error-summary && pnpm run test:execution-log && pnpm run test:pi && pnpm run test:skill-document && pnpm run test:dialog-results && pnpm run test:dsh && pnpm run test:hermes && pnpm run test:overlays",
     "stage:upstream": "node scripts/stage-upstream.mjs",
     "test:upstream": "node --experimental-strip-types --test src/lib/upstream.test.ts src/lib/agent-skill-actions.test.ts src/lib/codex.test.ts src/lib/codex-defaults.test.ts src/lib/directory-diagnostics.test.ts",

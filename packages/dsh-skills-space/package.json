@@ -1,0 +1,26 @@
+{
+  "name": "dsh-skills-space",
+  "version": "0.2.2",
+  "description": "Find, install, and browse DeepSeek Harness skills in Skills Space.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build --config vite.config.mts && node ../../scripts/stage-dsh-companion.mjs",
+    "prepack": "pnpm run build"
+  },
+  "main": "./host.mjs",
+  "exports": {
+    ".": "./host.mjs",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": ["host.mjs", "marketplace.mjs", "managed.mjs", "policy.mjs", "dist/client.js", "dist/discover.mjs", "dist/source.mjs", "dist/policy-state.mjs", "dist/agents.json", "dist/directory-config.mjs", "dist/dsh-skill-version.mjs", "cordis.patch.yml", "icon.svg", "locale/*.json"],
+  "dependencies": {"skills": "1.7.4"},
+  "engines": {"dsh": "0.2.2-rc.1"},
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {"patch": "./cordis.patch.yml"},
+    "client": {"platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-slots", "@deepseek-ai/dsh-client-locale"]}
+  }
+}

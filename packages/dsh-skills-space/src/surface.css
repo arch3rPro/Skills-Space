@@ -1,0 +1,43 @@
+@import "../../../src/index.css";
+
+.dsh-skills-surface,
+.dsh-skills-surface.dark {
+  --background: var(--dsw-alias-bg-base);
+  --foreground: var(--dsw-alias-label-primary);
+  --card: var(--dsw-alias-bg-layer-1);
+  --card-foreground: var(--dsw-alias-label-primary);
+  --popover: var(--dsw-alias-bg-layer-2);
+  --popover-foreground: var(--dsw-alias-label-primary);
+  --primary: var(--dsw-alias-label-primary);
+  --primary-foreground: var(--dsw-alias-bg-base);
+  --secondary: var(--dsw-alias-bg-layer-2);
+  --secondary-foreground: var(--dsw-alias-label-primary);
+  --muted: var(--dsw-alias-bg-layer-2);
+  --muted-foreground: var(--dsw-alias-label-secondary);
+  --accent: var(--dsw-alias-bg-layer-2);
+  --accent-foreground: var(--dsw-alias-label-primary);
+  --border: var(--dsw-alias-border-l1);
+  --input: var(--dsw-alias-border-l2);
+  /* Keep the shared project accent for switch states and focus rings. */
+  --destructive: var(--dsw-alias-state-error-primary);
+  --control-background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-layer-1));
+  --control-height: 2.25rem;
+  --control-radius: .75rem;
+  --button-radius: .5rem;
+  --button-height-sm: 2rem;
+  --button-font-size: .875rem;
+  --toggle-height-sm: 2rem;
+  --toggle-height-xs: 1.75rem;
+  --segmented-padding: .125rem;
+  --card-radius: .75rem;
+  --dialog-radius: .75rem;
+  --dialog-padding: 1.5rem;
+  --popover-radius: .5rem;
+  --app-font-sans: var(--dsw-font-family, system-ui, sans-serif);
+  --text-sm--line-height: 1.375rem;
+  font-family: var(--dsw-font-family, system-ui, sans-serif);
+  font-size: .875rem;
+  line-height: 1.375rem;
+  color: var(--foreground);
+  color-scheme: inherit;
+}
