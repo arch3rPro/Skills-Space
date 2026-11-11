@@ -607,3 +607,247 @@ DSH原生视觉条件统一使用已有dshNativeBatch（page agents+当前DSH+na
 用户反馈Pi和Codex原生技能“全部来源”文字下移。两者复用SelectTriggerButton与filter-trigger Grid：固定高度/垂直padding下，选项宽度测量行按文字最小高度撑高grid轨道，仅align-items:center不能居中整行。共享filter-trigger/choice-fit补align-content:center，让轨道在触发器内整体垂直居中；保留现有宽度测量、截断、箭头与菜单交互，不添加Agent专用位移。轻量局部CSS修复，静态复核与唯一正常App打包更新，不新增镜像样式测试，不执行整套UI自动化，未提交。
 
 第32节独立静态复核与git diff --check通过；唯一正常App构建退出0（含TypeScript/Vite/Rust），ad-hoc deep strict签名通过，已精确更新打开工作区App PID33332→39004。日志`.scratch/source-filter-alignment-fix/app-build.log`与`sign.log`。未新增样式镜像测试、未运行业务或UI自动化；实际文字/箭头像素对齐由用户在Pi/Codex原生来源筛选手测，不将静态审查表述为像素验收。未提交。
+
+
+## 33. 修复 DSH Desktop 内置 Agent 预设加载失败（2026-11-10）
+
+升级 DSH 后，标准、PTC、创造模式的旧用户覆盖仍引用宿主已移除的 `tool-subagent-list-agents`，导致加载失败。极简模式未受影响。
+
+在「设置 → 智能体 → DeepSeek Harness」选择配置文件。当内置预设的用户覆盖包含可安全移除的旧条目时，Agent 预设区提供「修复预设」。确认后仅删除该条目，并校验组合配置的其他内容保持一致。重启 DSH 后使用修复后的配置。
+
+本机已应用修复并重启 DSH Desktop，新任务菜单可选标准、PTC、极简、创造四项。按用户要求回退同轮 DSH 插件生命周期、版本管理和插件内界面改造，独立保留本节的修复入口。
+
+回退后，仓库内嵌包和本机 Desktop 插件均为 `0.2.0`。本机预设配置、Web 包清单和调用策略与回退前逐字节相同。实际配置回读仍列出四个已启用的内置预设，且无待修复条目。使用原版 Desktop 的两项定向测试通过，覆盖旧条目的精确删除、被上层覆盖的条目保留、其他配置保留及过期修改拒绝。调试包构建和本地签名校验通过。
+
+## 34. DSH 技能空间伴随插件返工任务（2026-11-10）
+
+状态：已授权实施，未整体验收。范围为独立 `dsh-skills-space` 插件的 P0/P1 与受影响页面，不改变本体其他 Agent，不自行升版、提交、发布或安装到个人 Profile。当前源码仍沿用未另行批准的 `0.2.0` 版本号；它不表示这次返工已发布或通过验收。
+
+2026-11-10 用户明确否定首个候选的视觉结果；该候选即使业务回归通过，也不通过页面验收。优先停止功能扩展，修正工具栏固定高度/禁止换行造成的堆叠、NativeSelect 容器与实际控件不同宽造成的箭头分离、错误灰色 Dialog 表面、胶囊按钮与宿主普通控件不匹配及字体/密度。复用共享组件可选几何 token 与换行布局，保留原应用默认；以同一官方隔离页面的全局管理、创建、安装三张前后截图及实测尺寸/颜色检查验收。已观察的一次方向键跳过项目标签也须定向复验。P0 策略接入暂停开发并保持未完成，不以构建或测试结果替代本次视觉验收。
+
+本轮用户进一步指出四项确定的规范偏离，优先按现行基线整批纠正：设置页预设使用已有卡片选择（名称、ID、用途），目录复用已有默认目录关联开关、可编辑目录行与添加/移除操作，删除监听入口并在保存/恢复时保留所有 watch 配置；卡片和列表承担管理操作，正文预览保持只读，列表预览固定为一个独立右侧区域，不让操作按钮成为额外 grid 子项；搜索保持标准 `14rem`，次要操作默认图标加文字，按实测宽度依次收起文字；导航恢复 quiet Tabs。此前局部视觉记录不构成这些完整页面任务验收。目录恢复按第12节只恢复四个目录字段，不撤销整个预设覆盖。整批实施后由独立审查集中查漏，再统一构建与更新预览；不逐点构建截图，不升版、提交、发布或安装个人 Profile。
+
+用户任务与预期结果：
+
+- 同一源码快照生成唯一候选包；包中的 Host、Client、辅助模块与验收对象一致，记录内容校验值，不能用旧产物证明新功能。
+- 用户分别控制技能启停、自动选择与手动调用；遵循源文件限制和现有文件级策略，禁用优先副本不能回退到同名低优先级文件；已有会话和新会话均验证，插件停用/卸载后撤回运行接入，保留技能与上游锁文件。没有验证过的宿主接口不得伪装为已生效。
+- 从商店或托管库存安装到全局/登记项目；安装资格与当前预设的发现状态分开判断。已确认的路径冲突阻断，未知发现状态说明影响后允许继续；成功项由真实文件与原版锁确认，返回实际目标库存。
+- 搜索/来源筛选不清空隐藏项的批量选择；全选和反选只修改可见项，按动作核对资格，部分失败保留未完成项。
+- 在实际合格的独立目录创建技能；托管卸载走原版 CLI，独立原生卸载走已验证宿主的系统废纸篓；确认真实范围、过期内容拒绝、部分结果及恢复路径。
+- 目录设置带入当前预设；首次父覆盖使用共享确认框且保存期间保持打开，失败可恢复。保存响应更新已确认值，回读失败不显示旧值为成功；冲突重读失败保留草稿。
+- 保留全局/项目/商店及卡片/列表分工；复用共享组件、动作行、提示和状态筛选。宿主主题映射、宽窄布局、键盘和焦点、加载/空/失败/忙碌状态纳入验收。
+
+实施状态与已确认限制：
+
+- [Host](../../packages/dsh-skills-space/host.mjs) 已将标准共享目标与预设发现分离，无 preset 仍可安装和管理；锁记录中的标准文件补入托管库存，并明确发现状态。单个动态目录字段不连带丢弃其他可确认的根。锁读取失败具有独立归属状态；[Client](../../packages/dsh-skills-space/src/client.tsx) 保留同一上下文上次已知库存，显示重试，不能当首次使用空态。
+- 管理入口共用库存失效信号；创建、卸载、安装和目录保存触发已挂载入口重读。隐藏选择保留，卸载预览逐项区分可执行与排除项；硬链接、嵌套技能和其他共享安装路径有具体原因，部分结果保留未完成与排除项。创建选择实际启用且独立的目录，在写入锁内和 CLI 前重查目录修订。
+- [目录表单](../../packages/dsh-skills-space/src/directories.tsx) 复用在插件设置和原生页“更多操作”入口，带入当前预设。确认期间保持打开，busy 阻止外层关闭及预设切换；保存回执先更新字段、摘要和发现信息，失败重读不删除草稿。保存动作复用固定弹窗动作区，普通成功使用共享通知。
+- [安装任务](../../packages/dsh-skills-space/src/installation.tsx) 复用共享 Modal、固定动作区和批量选择条，展示确认成功与未完成名称，可仅重试未完成项或进入实际目标库存。来源解析复用原版解析脚本，代码支持 HTTPS Git 与本地目录；真实安装仍走原版 CLI。该扩展须随最终候选重新验证。
+- 原版 `skills@1.7.4 add --agent universal` 对唯一共享目标使用复制，复制/任意链接选择的完整原合同尚不满足；界面明确展示实际复制方式，不提供不会生效的链接开关。
+- 技能详情恢复共用 Preview/Source 与原始 frontmatter；macOS “在访达中显示”只接受当前范围库存核验过的技能 ID。Client 使用宿主语义主题 token 和单一通知挂载。实际主题、键盘、窄宽和正式 Desktop 窗口仍须观察。
+- **调用策略 P0 未完成。** 已直接在官方 Desktop `0.2.2-rc.1` 随附运行时验证：同层同名 provider 替换被拒绝；全局 provider 不能约束 preset 的技能；Agent 层 provider 覆盖会改变已有 Agent 局部同名胜者。上述 provider 注册路径不能满足完整合同。后续补查发现 Cordis 4.1.0 公开声明的 `internal/get` 服务读取 waterfall；它不是 `Context.intercept` 配置合并器。当前官方 `dsh-tool-skill` 的模型加载、手动 `/name` 和目录 pre-step 每次重新读取 `ctx.skills`。在官方 Electron 内，启用前建立的 consumer callbacks、两 preset/两 Agent 同名胜者、源限制与偏好 AND、作用域/取消信号、停用与 in-flight 撤回等隔离实验已通过 32 项，证明该公开路径值得继续实施，不能再笼统表述为没有任何公开候选。启用前缓存的原服务/方法会绕过该 lookup hook，这是已确认边界；真实官方 consumer 与文件 provider、持有旧 preset revision 的完整会话仍须验证。真实官方 FileSystemSkillProvider 与真实 dsh-tool-skill 的模型 execute、手动 pre-step、目录 pre-step 进一步通过 17 项检查，包含 canonical symlink 身份与目录 replacement；Session history 使用明确的测试 adapter，仍不等同完整会话/retained revision。现开始最小产品集成：沿用同一 `skill-policy.json` v2 和跨进程 PID 锁、复用既有纯规则变更和启停/双通道控件；不改 provider、preset 或技能正文。预期任务为单项/批量启停和通道设置、关闭最后可用通道时停用并保存原偏好、按真实文件加名称同步多个入口、旧策略/正文 revision 拒绝写入、混合批量独立列明不合格项、读写失败保留可恢复状态。原生/托管/内置等卸载资格独立于运行策略资格，禁用仍保留当前同名胜者位置。批量确认复用已有 Modal/选择流；当前桌面 DshBatchControls 绑定 Tauri 与原生卸载 backend，不把它整段复制进插件，改用其已有纯 SkillBatchToggleControls、DshPolicySwitch/Channels 与共享表单组件组合。不写永久 preset 覆盖、不修改私有 registry、不以 UI 状态冒充生效。当前不开放相关可操作控件，状态筛选也未以虚构启停状态补齐。
+
+验证采用自动化分支，仅使用隔离 HOME/Profile/项目。独立测试与 UI 审查已完成一轮完整任务静态检查并提出合并清单；上述实现按清单集中修复。首轮候选的插件业务回归 18/18、DSH 39 通过/31 条件跳过、上游 100/100 与文档 22/22 已通过，但用户和 UI reviewer 判定其视觉失败。随后单独修正 16 个视觉/键盘文件，Host、managed 和业务 helper 未变化；新视觉候选 SHA256 为 `a9c29258432d026b43eb5d646db24da3b256a06eaf51feb68043324c61d0815d`，根构建、prepack 与包一致性 2/2 通过。官方隔离 Web 实际确认了深色弹窗表面 `#2c2c2e`、12px 弹窗圆角、8px 按钮圆角、36px 输入框、14px/22px 宿主字体；安装 preset select 与父容器均 512px，箭头不再游离。设置内容宽 564px 的实拍显示工具栏按搜索与动作两行自然布局，卡片不受覆盖。一次 ArrowRight 已实际从全局进入项目而非跳到商店。侧栏、创建、安装和设置入口均有新实拍；原始视口与旧图不同，局部裁切对照不冒充同视口像素比较。主会话持有唯一预览服务，防止测试子会话结束后服务被回收。随后单独修正安装任务的 ShadowRoot 初始焦点：候选 SHA256 `dfe97c8ca2f6024d4b5b4282877065ed62d497ec458dc0da7c6dae9ce5292e3f` 唯一源码差异为共享 Modal 的打开焦点处理，根构建、prepack 与包一致性 2/2 通过。官方 Web fresh 打开安装后实际焦点为 `#dsh-install-source`，只读安装方式不再自动全选；关闭后自然返回“添加技能”按钮。该命名路径通过，不能推广为所有 Modal/AlertDialog。light、更窄窗口及其余复杂焦点路径未纳入本轮定向观察，不能扩大通过范围。早期旧包和旧截图只保留为历史，不能证明本轮源码。正式 Desktop、实际系统废纸篓及模型/手动调用未经本轮观察时保持未验证；P0 或其他实质问题未解决前不得宣告整体完成。
+
+
+## 35. Companion inventory layout and details (2026-11-11)
+
+User tasks: distinguish scope navigation from Native/Managed selection; keep search and actions on one row; keep list controls together and give details a distinct reading surface; preserve filters and scroll position when opening card details.
+
+Implementation: scope keeps quiet Tabs; collections use the existing segmented ToggleGroup. InventoryToolbar uses its default measured single-row layout, hiding secondary labels before horizontal overflow. List entries keep enablement and actions in one non-shrinking row. Split columns start at 800px with a 22rem minimum list; smaller containers stack the two panels. Details use the shared Card composition. Card details use the shared Modal instead of replacing InventoryPage, with focus returned to the originating card title. No new UI primitives or theme overrides.
+
+Delivery: companion 0.2.1 candidate e6e1aea4d9fe is installed in the persistent isolated Web Profile at http://127.0.0.1:64580. The personal Desktop target was not updated for this batch. Companion strict TypeScript/Vite/staging completed. Actual appearance is available there for manual testing.
+
+Existing companion regression suite against that archive: 18 passed, 1 explicit HTTPS Git opt-in skipped. Installed QA Host/Client bytes match the candidate. This records build/package and behavior checks; it does not record a visual observation of the browser page.
+
+Follow-up: list hover/selection now covers the complete InventoryListRow, including its switch/actions. Its title uses the shared plain Button variant so it does not paint a separate selection background. QA candidate 1dd092cf60e8 replaces e6e1aea4d9fe; companion build and main TypeScript checks passed.
+
+
+## 36. Companion managed installation and native entry cleanup (2026-11-11)
+
+The user requested that managed Add skills follow the main application and that native Create skill be removed. This supersedes the native creation entry requirements for the companion; the underlying original CLI capability remains.
+
+The companion now uses SourceField, StepIndicator, InstallSkillOption, BulkSelectionBar, InstallModeField, InstallReview and OperationResults from the main application. Its five steps are Source, Skills, Targets, Review and Result. Source preview does not silently select a sole skill; explicit source filters and prior selections remain supported. Git and host-local sources are exposed, with the public host directory picker. Download input is omitted because the current companion adapter has no download lifecycle contract; the main SourceField still exposes downloads by default.
+
+The installation target is DSH in the selected global/project scope. The shared mode control accurately shows copies for the original universal target; no ineffective symlink option or installation-time Agent preset editor is offered. Changing scope re-previews the source for that destination before review. Internal-skill discovery uses the original parser/discovery helper and the explicit CLI selection. Partial results retain unfinished names for reinspection; source/selection/target/review remain separate from the result. Installation progress uses the shared notification hook, which now dismisses its loading notification when progress ends. Native inventory no longer mounts the creation dialog or exposes its button.
+
+Candidate 0.2.2-a670d8dd7afb is installed in the persistent QA Web environment. Companion build and main TypeScript checks passed. Packed companion regressions: 19 passed, 1 explicit HTTPS Git opt-in skipped; these include step transitions, target reinspection, partial retry, actual internal-skill installation through the original CLI, and progress dismissal. Installed Host/lifecycle/Client match the candidate bytes. The browser page is available for the requested manual testing.
+
+
+## 37. Compact list and document mode contrast (2026-11-11)
+
+List entries reduce vertical padding and secondary-line gaps. Shared InventoryListActions appears on row hover or focus-within; touch devices keep actions visible. The whole-row selected surface remains. List detail uses a shared detail Card variant: larger title, description and compact metadata grouped in its header, then whitespace before the document; no divider is added. SkillDocument uses a shared document Toggle variant with primary/primary-foreground for its selected mode, including hover, across list, modal and main-app consumers.
+
+QA candidate 0.2.2-b49a15e91165 is installed in the persistent Web environment. Companion build, main TypeScript and the two archive loading/content checks passed.
+
+The metadata divider was traced to the old global .skill-detail-metadata grid rule in index.css. Removed that rule and its obsolete responsive grid override, including border-bottom and bottom padding, so SkillDetailMetadata owns its layout and spacing.
+
+
+## 38. Collection and filter alignment plan (2026-11-11)
+
+Status: batches A-C remain in the working source; their QA deployment was rolled back after the user reported live loading failures. The comparison below records the starting point; completion evidence is in 38.6. The user explicitly defines Agent presets as a native-skill filter. This supersedes the companion-wide preset selector and its effect on managed inventory.
+
+### 38.1 Product contract
+
+- Managed inventory is the original CLI lifecycle surface for the current global/project scope. It is independent of the selected native preset.
+- DSH native inventory is the DSH discovery surface. A CLI-managed file discovered by DSH can appear in both collections; discovery membership does not transfer its lifecycle ownership.
+- Native preset selection filters discovery memberships in the current running Profile. Default to All presets, not the first configured preset. Selection does not change the active Agent, session mode or default preset.
+- The companion reads the current host Profile. The main application can inspect multiple installation/Profile files; the companion must not fabricate equivalent cross-Profile controls.
+- Preserve the recent single-row toolbar, segmented collection switch, compact hover-action list, detail hierarchy and document-mode contrast. Native creation remains absent.
+
+### 38.2 Observed differences
+
+| Area | Main project | Current companion | Planned alignment |
+| --- | --- | --- | --- |
+| Collection meaning | App.tsx builds managed lifecycle rows separately from dshDiscoveredSkills; the DSH discovery collection can include managed files | InventoryPage partitions rows exclusively by managed true/false | Two projections with overlapping membership; lifecycle ownership remains separate |
+| Untracked standard roots | skillCollection/isNativeSkillForAgent use CLI addressability as well as management evidence; a standard CLI target does not become native-owned solely because its lock is absent | managedCandidate requires a matching lock entry; other shared-root rows can fall into native | Use the shared lifecycle/addressability rules, while keeping actual mutation qualification separate |
+| Preset scope | DshNativeContextChoice filters native discovery membership, with All presets | One selected preset gates both collections, details, mutations and cache keys; default is the first preset | Preset belongs only to native filters; managed requests/actions do not depend on it |
+| Native inventory | Aggregate discovery has memberships and per-context shadowing | withInventory inspects only the selected preset and returns one shadowed boolean | Aggregate current-Profile preset discovery, retaining membership and each preset winner |
+| Managed source | managedSkillSourceOptions/skillSourceKind group Git, local, download, website, dependency and unknown sources from installation metadata | The source selector uses DSH directory labels; asInstalled discards source/sourceUrl | Return safe recorded installation metadata and reuse source grouping |
+| Native filters | DSH uses configuration/preset filters, not the generic Pi invocation-status filter | Native and managed share directory-source and enabled/model/manual/shadowed filters | Native search plus preset; omit the redundant configuration picker for the single running Profile |
+| Managed status | UI offers All/Enabled/Disabled; unknown is excluded from enabled and disabled | Generic policy/call-channel/shadowed selector; failed policy reads can resemble disabled | Keep three managed states and preserve unknown; fix the shared DSH state branch described below |
+| Search | visibleSkills includes name, description and recorded source text | Only name and description are searched | Reuse the common search semantics with real source metadata |
+| Counts/options | Collection counts and source options use unsearched scope inventory, independent of filters | Counts/options use a single preset response | Count the full current-scope collection and derive options before search/status/preset filtering |
+| Session state | Scope/Agent/collection filter sessions; native preset is a filter value | Preset is part of every collection context and ownership cache | Separate managed and native session keys; preset is absent from managed keys |
+| Action eligibility | Policy, managed CLI lifecycle and independent native Trash each have their own eligibility | One removable flag represents managed removal or native Trash, and client selection combines it with policy eligibility | Expose distinct capabilities so a discovered managed file never gains native Trash |
+| Selection | Collection changes exit selection; managed source/status and native preset changes clear selection; search-hidden selection is retained | changeFilters does not clear selection; preset-bound selection can disappear and return | Match the main transition rules and keep Select all/Invert limited to visible eligible rows |
+| Failures/empty | Unknown directory declarations and no results have separate states | Partial/error flags and one-preset results can hide unavailable membership or invalidate source choices | Preserve known rows; report unavailable inventory separately from empty or no matches |
+| Lifecycle breadth | Managed updates, same-source removal, sync, version/diff and additional source types exist in the main app | Companion primarily supports add/removal, policy and preview; Git/local installation flow was recently aligned | Record these as actual feature gaps; sequence them separately from filter correctness |
+
+One main-project defect must not be copied: managedSkillEnabled in src/lib/managed-skill-filters.ts has Codex/Pi/Hermes branches but no DSH branch. Add DSH to that shared function using confirmed policy state; an unavailable/error read returns unknown, not disabled. Verify both consumers. The companion already reads DSH policy state, but its adapter currently supplies no installation source metadata to shared helpers.
+
+Source references: [main inventory and toolbar](../../src/App.tsx), [managed filter rules](../../src/lib/managed-skill-filters.ts), [collection/source/search rules](../../src/lib/upstream.ts), [DSH discovery and membership](../../src/lib/dsh.ts), [native context selector](../../src/components/dsh-context-fields.tsx), [filter sessions](../../src/lib/filter-session.ts), [companion client](../../packages/dsh-skills-space/src/client.tsx), [companion Host](../../packages/dsh-skills-space/host.mjs), [companion lifecycle](../../packages/dsh-skills-space/managed.mjs).
+
+### 38.3 Intended filter surfaces
+
+| Collection | Left side, one toolbar row | Right-side actions |
+| --- | --- | --- |
+| Managed | Search, installation source, All/Enabled/Disabled, Refresh | Card/list view, batch selection, Add skills; updates after its real backend is implemented |
+| Native | Search, Agent preset (All presets by default), Refresh | Card/list view and batch selection. Directory editing is in plugin settings (38.12). |
+
+The project workspace remains a scope selector shared by both collections. The running Profile is an identity, not a fabricated configuration selector. Move the preset selector into the native filter group; remove it from the shared collection header and managed page. Preserve non-wrapping toolbars and the existing progressive label collapse.
+
+Native preset options follow dshNativePresetChoices: include readable directory declarations and unknown declarations, omit declarations known to have no directory capability. The settings page still lists all actual presets, including Minimal or other presets with no directories. An unknown preset remains distinguishable from a known-empty discovery result.
+
+### 38.4 Data and state changes
+
+1. Separate collection identity from discovery context. Managed reads take collection and global/project workspace; no preset parameter. Native reads take the same scope plus an optional preset filter whose empty selection means All. Native filtering may happen over a cached aggregate, but the Host must retain all membership information.
+2. Supply two projections from the same scope snapshot: managed lifecycle entries and DSH discovered entries. A physical SKILL.md plus declared name identifies policy/detail objects; each native object carries preset memberships with per-membership shadowed state. A managed object retains recorded source/sourceType/installSource/sourceUrl, CLI addressability, ownership-read status and independently evaluated capabilities. Expose only UI-needed source metadata, never provider configuration or credentials.
+3. Aggregate discovery only within the current Profile, using the official provider and its winner rules. Do not merge files by name or manufacture runtime evaluation for dynamic roots. Preserve provable roots and known memberships when one declaration cannot be read, and mark the missing portion explicitly. This static inventory does not claim live Session loading.
+4. Reuse dshDiscoveredSkills/filterDshSkills/dshMatchesMembership semantics through a small typed adapter, plus visibleSkills and the managed source/status helpers. Extract only a genuinely runtime-independent helper when needed. Keep official provider and original CLI I/O in Host adapters; do not create a second store or filter engine.
+5. Managed cache/filter keys are running-Profile identity + scope/workspace + managed. Native keys use the same identity + native; selected preset is stored as a filter. Preserve query and valid filters when switching collections, layout or details. Reset a removed preset to All, not the first preset. Invalid legacy directory-source values reset to All without losing the query. No new persistent storage is needed.
+6. Resolve details and mutations from collection/scope/object ID independently of the old global preset selector. Managed installation and removal use the true CLI target. Policy saves still validate physical file, document revision and policy revision. Native aggregate operations validate the relevant declaration/membership revision, not an arbitrarily selected first preset.
+7. Give policy, managed removal and native Trash distinct capabilities. In the native discovery view, CLI/shared/bundled files may expose policy controls when qualified, while native Trash remains forbidden. An unknown ownership read cannot grant mutation rights or move a previously known managed file into another collection.
+8. Counts are full collection totals before search and filters. Native counts deduplicate discovery objects across presets. Source choices come from complete unsearched managed inventory. A read failure retains its own error/unknown state and must not erase a filter option as if the source disappeared.
+9. Directory settings remain a separate editing task. A specific native preset can be carried into it. All presets opens the settings task and lets that task choose a preset; it must not silently convert All into the first preset for an inventory action.
+10. Preserve scope semantics: the main project resolves DSH project roots through the nearest Git root, whereas the companion also rejects some add/remove targets below a parent repository. Inspect and reconcile the read/write root contract before relaxing this restriction; never silently redirect an operation to another project.
+
+### 38.5 Implementation batches and completion tasks
+
+| Batch | Coherent scope | Completion tasks |
+| --- | --- | --- |
+| A: collection and preset semantics | Split managed scope from native discovery; add aggregate memberships; move preset into native filters; decouple existing details/actions | Switching native presets never changes managed rows, totals, query or source filters; All discovers the union of eligible current-Profile presets; a discovered managed file can appear in both views with the same file identity |
+| B: shared filters and state | Carry source metadata, reuse managed/search helpers, add the missing shared DSH status branch, normalize filter sessions/counts/empty states | Git/local sources filter by installation origin; search finds recorded source text; unknown is neither enabled nor disabled; counts/options do not shrink with filters; collection/source/preset/search transitions follow the rules above |
+| C: existing action consistency | Use separate policy/CLI/Trash capabilities and correct context/revisions in individual and batch flows | A discovered managed file cannot be trashed from Native; same-file policy changes reflect in both views; same-name independent files stay separate; failed reads and partial operations retain recoverable state |
+| Later capability work | Reconcile updates, sync, installed-revision comparison/diff, downloads and website sources with the existing main contracts; version reading/display and same-source removal review already exist | Add only real Host lifecycle support and reuse its main-project UI; keep these gaps explicit instead of exposing no-effect controls or claiming full feature parity |
+
+Use the persistent isolated Web Profile for the implementation. Extend the existing DSH/companion checks only for changed collection/filter/ownership rules, build the affected deliverable once per coherent batch, and inspect the named user tasks. The original proposal received reference and consistency checks; its implementation uses the behavior checks below.
+
+Minimum acceptance examples: (1) changing Standard to Creator on Native leaves Managed unchanged; (2) All presets and a single preset produce correct union/membership results; (3) a discovered CLI-managed file appears in both views but has only its valid lifecycle actions; (4) a standard CLI target with no lock is not automatically native-owned; (5) unavailable policy state matches neither Enabled nor Disabled; (6) source/status/preset filtering preserves totals and source choices; (7) hidden search selection and visible-only All/Invert behave correctly; (8) an unreadable preset or ownership file is not reported as an empty collection.
+
+### 38.6 Implementation and delivery
+
+Batches A-C are implemented. The Host returns current-scope inventory without a preset parameter; the browser derives managed lifecycle and native discovery projections. Native defaults to All presets and filters per-preset membership, source and shadowing. Managed inventory, installation/removal targets, filter cache and policy context revision are independent of native preset selection. Recorded installation source metadata feeds shared source labels/options, search and managed filters. The shared DSH enablement branch preserves unavailable state, and shared search also matches recorded source URLs.
+
+CLI addressability and matching locks are represented separately. Standard untracked shared-directory skills remain in the CLI lifecycle; review binds their absent lock as well as file revisions, and actual removal still uses the original CLI. Native discovery can display these files without native Trash. Managed removal and native removal capabilities are separate. The existing parent-Git-root restriction is reflected in capabilities before offering an action; it has not been silently redirected to a parent scope.
+
+Known membership survives partial discovery, and known CLI rows/source metadata survive unreadable shared inventory or ownership. Retained unreadable files cannot grant policy/removal rights. Collection/source/status/preset changes follow the selection rules; search-hidden selection is preserved. Native preset selection and managed search/source/status occupy their respective shared toolbar filter groups. The source-level UI consistency check retains the existing compact list, hover/focus actions, grouped detail metadata, modal behavior and document mode contrast.
+
+Previous attempted delivery: 0.2.2-d6bbc2eed7f1, persistent isolated QA Web at http://127.0.0.1:64580. Companion build and main TypeScript passed. Packed companion plus shared upstream/DSH regressions: 109 passed, 1 explicit HTTPS Git opt-in skipped. Tests exercise the official filesystem provider and original CLI, overlapping collections, per-preset source/shadowing, preset-independent managed policy review, untracked CLI removal, project-root capability limits, source/status/search, selection transitions and partial-cache recovery. Module loading and installed content are checked separately; these automated contracts do not establish browser DOM/visual acceptance. Later lifecycle capabilities in 38.5 remain separate work.
+
+Version correction: restored the existing 0.2.2 version at the user's direction, retaining the implementation. The repacked artifact passes module loading and content checks; functional regression evidence is unchanged. AGENTS.md now requires an explicit user request before any version change. QA filenames retain content hashes to distinguish builds.
+
+### 38.7 Runtime directory rules and read errors
+
+The generic partial-directory banner was triggered in the real isolated Profile by the Creator preset's customSkillDirs expression, with no filesystem read failures. Runtime declarations and actual provider/file read errors now have separate metadata. Runtime rules appear as a contextual information hint beside the native preset filter; empty runtime-dependent results explain that context. Actual incomplete reads retain a scoped error identifying the affected preset or shared skill directory. Partial-cache retention remains independent of this presentation.
+
+The current QA snapshot reports runtimePresets=[cordis], readFailedPresets=[], managedPartial=false. The unchanged version is 0.2.2; candidate 967a3571c27e is installed. Companion build and four targeted packed checks passed, including an actual inaccessible-directory fixture that remains a read error.
+
+### 38.8 Stalled loading and Host filesystem boundary
+
+The user supplied an isolated-Web screenshot stuck on loading skeletons with Refresh disabled. Earlier independent checks omitted the live Host session filesystem. The pinned original provider prefers ctx.get(fs) whenever present; inventory must instead use its native Host-file fallback, independent of conversation filesystem/session authorization. A narrow read context now selects that supported fallback without changing the original parser, root discovery, runtime filesystem service or mutation qualification.
+
+useRequest now supplies a 15-second read deadline, distinguishes timeout failure from component cleanup cancellation, and Refresh remains available during the initial inventory request. Refresh replaces and cancels a pending request instead of leaving an unrecoverable skeleton.
+
+Candidate 0.2.2-d6bbc2eed7f1 is installed in the persistent isolated Web environment. Build and four targeted packed checks passed. The original-provider fixture now mounts a deliberately waiting session filesystem and verifies inventory never enters it. A real Chrome DOM fixture using the production client and the current Profile snapshot reproduced the old disabled-refresh skeleton with a pending first inventory response; the fixed client recovered all three skills on Refresh and rendered list/document views with no browser errors. This DOM fixture controls API responses; it is distinct from directly observing the user's authenticated Web tab.
+
+### 38.9 Active QA rollback after live loading failure
+
+The user continued to report loading failure. The active persistent QA Profile has been rolled back to 0.2.2-62e313510cbd, the pre-filter-refactor build from the metadata-divider repair. Installed Host, lifecycle and Client bytes were checked against that archive. The recent filter/refactor and loading-repair source remains in the working tree, but is not the active QA package. Do not confuse isolated renderer checks or an unauthenticated 401 with proof that the user's full Host page works.
+
+The fixed-port server is listening again at 127.0.0.1:64580 and the official Host browser-opening flow was used, without extracting credentials. The launcher now has an explicit dev:dsh open command for that normal entry flow. User-visible inventory completion has not been observed directly; rollback/installation and service availability are the established facts. Re-establish the complete real-Host inventory path before replacing this baseline with the working-tree build.
+
+### 38.10 New clean test environment (historical baseline)
+
+At the user's explicit request, created a fresh official Web Profile, skills-space-clean, at .scratch/dsh-clean-test/home/.dsh/profiles/skills-space-clean, on 127.0.0.1:64590. HOME, DSH_HOME, Profile configuration, dependencies and the visible Chrome user-data directory are separate. Existing QA on 64580 and the personal Desktop were retained. The installed plugin is the pre-filter-refactor 0.2.2-62e313510cbd baseline; current working-tree inventory/timeout experiments are not deployed here.
+
+Verified the actual original Host and plugin in a real dedicated browser through the official SDK authenticated opening flow. Before installing the plugin, workspace and plugin-management pages rendered and core API requests returned 200. After installation, the sidebar skill-space entry rendered, native-smoke and managed-smoke each appeared in their collection, and list/cards, the managed detail dialog, preview and source controls worked. Original skills CLI 1.7.4 installed the managed fixture with universal/copy in the isolated HOME. Actual skill endpoint responses returned 200 with no captured page exceptions. Screenshots were inspected after dismissing the ordinary account-start notice; this verification uses real Host endpoints, not mocked fetch responses.
+
+Controls: pnpm dev:dsh:clean status|start|open|restart|stop. open/restart only restart this new Host and use its normal authenticated browser opening; profile/skill data remain. The browser uses a separate persistent directory. Do not use an unauthenticated plain-URL 401 to infer application health. Evidence: .scratch/dsh-clean-test/host-before-plugin.json, plugin-check.json, final-check.json and verified-page.png.
+
+The earlier session-filesystem explanation remains a hypothesis; the clean full-Host baseline works with the original provider context. It is not an established root cause of the legacy environment's failure.
+
+### 38.11 Directory settings for minimal and creator presets
+
+Keep every declared preset selectable in settings. When the selected preset has no file skill provider, show “This preset does not read skill directories” in the existing shared empty state inside the skill directory card. The native inventory preset filter continues to omit presets confirmed to have no file skill provider.
+
+Show the recognized DSH creator skill directory as its own read-only field. Show ordinary additional directories individually and allow normal edits where the provider is writable. Retain runtime directory expressions in their existing order among the retained paths when saving, and keep a wholly dynamic directory list read-only.
+
+The desktop bundle and companion package built successfully. The packaged companion check covered editing mixed directories and restoring defaults using the official creator preset. The desktop adapter prepared a mixed-directory save and verified the composed configuration without writing it. Native filter checks passed. The clean Host on port 64590 was updated to candidate `0.2.2-53179d9d4fef`. Browser inspection timed out before rendering could be verified.
+
+The empty-state style correction rebuilt the desktop bundle and updated the clean Host to companion candidate `0.2.2-2ed77dc1c981`.
+
+### 38.12 Native toolbar and plugin setup placement
+
+Remove the companion's More actions menu and its directory editor modal from both native inventory scopes. Directory editing uses the existing DSH plugin settings. In the desktop app, show a compact skill enablement and invocation row below the configuration selector and above preset settings when the selected configuration declares a skill provider. Show installation only when needed, enable separately when the package is present, and keep paths and diagnostics in the confirmation or error details. The installation review and write target only the selected configuration file, regardless of the selected preset. Inventory browsing is independent of plugin setup.
+
+The companion adapts the current DSH profile, DSH workspace registry, host appearance and local filesystem actions. The inventory uses shared card, toolbar, filter and policy components. Remaining divergent compositions include installed skill metadata and navigation, removal review and partial-result feedback, and the managed installation wizard. The companion applies the same request cap to policy writes and removals, while its inventory copy describes the limit only as an uninstall limit. The shared store UI receives fewer details and installation sources from the companion backend. Updates, same-source removal, sync and source comparison remain capability gaps.
+
+The desktop debug bundle built and passed ad-hoc signature verification. The companion build and TypeScript check passed. The clean Host on port 64590 was updated to candidate `0.2.2-c937adf99ec2`. The toolbar and settings placement were checked in source; rendered UI was not verified.
+
+After the desktop setup row was scoped to one configuration, the desktop bundle rebuilt and passed signature verification. The focused save feedback check and the original bundled Desktop CLI's Web, custom and no-provider configuration discovery check passed. Actual installation and the rendered settings row were not exercised in that check.
+
+### 38.13 Companion detail, operation and store alignment
+
+- Opening a card shows the shared detail page, with a back action that returns focus to the card. The split list keeps its inline detail. Both show the actual skill location, source, and declared or recorded installed version. The location is actionable where the host can reveal files.
+- Native and managed batch actions use the shared selection bar. Policy and uninstall request limits apply to the eligible rows for the corresponding action. Uninstall uses shared review and result rendering, retaining skipped and unfinished rows. Same-source managed removal reviews the current scope and rejects the write if the lock's source group changed after review.
+- The desktop and companion installation flows share source and skill selection steps. Companion retries preserve requested skills and recheck the selected destination before installing through the pinned original CLI. The shared destination continues to use file copies.
+- Store details read summary, installation guidance, repository, stars, topics and the website preview from the matching skills.sh listing. Published Markdown is still preferred for the original document. Summary prose remains separate from the skill body.
+
+The plugin does not expose update, sync or diff controls yet. The pinned update command has no Agent selector and can reinstall beyond DSH. Sync needs the installed-source and target conflict contract, and a diff needs a verified snapshot of the installed revision. Website installation still requires a provider preview and install adapter in the host.
+
+The desktop debug bundle and companion candidate `0.2.2-74e928e1aa04` built successfully. Targeted checks covered the packed artifact, source-group membership changes, partial uninstall and selection retention, old-scope request handling, installation review/retry, published page metadata, and declared version extraction. The candidate was installed in the clean Host on port 64590. The diagnostic browser did not render the Host navigation, so rendered detail and focus behavior remain unverified.
+
+### 38.14 Current checkpoint and next sequence (2026-11-12)
+
+The clean Profile package declaration points to the 38.13 candidate. Its earlier authenticated Host screenshot predates that candidate, so it does not close the rendered interaction gap. A read-only check found that the personal Desktop Profile still references `dsh-skills-space` in its Cordis configuration but declares neither that package nor the separate `@skills-space/dsh-skill-policy` package as a dependency. The cause and current Desktop loading outcome have not been established; no personal configuration was changed in this check. The full companion is at 0.2.2, while the desktop-managed policy package is at 0.2.0. The desktop setup currently installs the smaller package. In source, the companion omits disabled skills from `list`/`snapshot`/`get` after winner selection; the smaller package retains the winner with invocation off. Their coexistence and effective status have not been validated.
+
+Next, inspect the current candidate in the clean authenticated Host against the managed/native inventory, preset filter, detail, install, same-source removal and policy tasks. Then assign a single effective policy owner per Profile, align the two package installation/status paths and disabled-skill behavior, and verify that path in an isolated Profile before changing any personal Desktop setup. After those existing flows work, implement the remaining companion lifecycle tasks in coherent units: managed update; sync and source comparison with a verified installed revision; then download/website installation with actual Host adapters. Version display and same-source removal review are already present. This sequence does not add cross-Agent management, creative workshop features or general DSH plugin-market management to the companion scope.
+
+### 38.15 Clean Host acceptance and policy reconciliation (2026-11-12)
+
+The authenticated clean Host on port 64590 rendered the companion's managed and native collections, preset filter, detail, store detail, installation entry and removal review. The isolated data showed two discovered native skills and one managed skill; changing the native preset did not change the managed collection. A managed skill policy change saved, survived refresh, and was restored. These observations close the rendered checks named in 38.14 for those flows; installation completion and same-source removal were inspected at their review steps, not executed in this pass.
+
+The full companion now retains the DSH-selected skill in `list`, `snapshot` and `get` when disabled, with both invocation channels off. This matches the smaller policy package and preserves discovery count and same-name winner selection. The full companion publishes its active policy revision for its current configuration file. The desktop adapter uses that live status as the policy owner when the full companion is active, and does not offer the smaller package as an additional installation for that configuration. A live PID probe returning `EPERM` means the process exists; the adapter no longer treats it as stopped.
+
+The new isolated candidate is `dsh-skills-space-0.2.2-c6b6bd78c467.tgz`; the plugin version did not change. The Host was restarted with this candidate. Under the active companion, desktop inspection reported `owner=companion`, `status=active`, `canSave=true`, four declared presets and two discovered skills. Preparing a desktop policy change for the isolated native skill produced the intended single disabled rule without writing the file. In the actual Host, disabling the native test skill kept its card and count, and refreshing and restoring the channels worked. The focused policy regression check, app build and companion build passed. No personal Desktop configuration was changed. A single effective owner is selected by the desktop adapter; simultaneous loading of both plugin implementations in one Profile was not exercised.
+
+Remaining companion lifecycle work follows the 38.14 sequence: managed update, source sync and comparison with a verified installed revision, then download and website installation with real Host adapters. Keep these controls out of the UI until their operations work.
+
+### 38.16 Personal Desktop/Web delivery and standalone setup repair (2026-11-12)
+
+At the user's request, installed the same full companion candidate `0.2.2-c6b6bd78c467` into the personal `desktop` and `web` Profiles through the original DSH plugin command. Both Profiles previously had older policy-provider wrappers in their Cordis patches; the Web Profile's wrappers caused the original filesystem provider to reject an array-shaped configuration at startup. After backing up both Profiles and the shared policy file in ignored `.scratch/dsh-user-deploy-2026-11-12/`, restored each wrapper's original filesystem configuration and directory values, removed the redundant smaller policy package, and retained the full companion as the only Skills Space plugin dependency. The personal Web Host started at `127.0.0.1:64581`; the DSH Desktop application and Skills Space QA application were opened for manual verification. Both full-companion heartbeats reported version `0.2.2`, matching package content and policy revision. The Web startup log no longer showed the filesystem configuration error after migration. This establishes loading and policy activity, not the user's visual acceptance.
+
+The desktop `prepareSetup` path for a standalone filesystem provider used to place an array-shaped wrapper configuration under the original provider name. It now disables that provider and inserts a separate policy-provider entry, preserving the original provider configuration. An isolated original DSH Desktop composition check and the focused regression test passed. The updated Skills Space debug application was built, ad-hoc signed, verified and started. Its current artifact is `src-tauri/target/debug/bundle/macos/Skills Space.app`; no repository commit or plugin version change was made.
+
+The pinned original CLI's `update` command has no Agent selector. Companion managed update therefore still needs an operation that proves the DSH-only target and ownership before exposing a control; a plain `skills update` call would not satisfy that scope. The remaining work in 38.14 is unchanged.

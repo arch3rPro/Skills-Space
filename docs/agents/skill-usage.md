@@ -4,7 +4,7 @@ Status: Active guidance. Updated 2026-10-15.
 
 ## Selection and scope
 
-Use the ordinary workflow in `CLAUDE.md` unless a method is selected. UI tasks also require the applicable project skills below; this does not activate TDD, multi-agent work or a complete plugin workflow. Existing quality checks always apply. Scale verification to the change rather than requiring new tests, tickets or every skill for each small edit.
+Use the ordinary workflow in `CLAUDE.md` unless a method is selected. UI tasks also require the applicable project skills below; this does not activate TDD, multi-agent work or a complete plugin workflow. Apply the targeted checks in `AGENTS.md` and reuse valid prior results. Loading a skill does not require new tests, tickets, review agents or an expanded verification matrix.
 
 | Trigger | Required project-local skill | Purpose |
 | --- | --- | --- |
@@ -14,16 +14,16 @@ Use the ordinary workflow in `CLAUDE.md` unless a method is selected. UI tasks a
 
 Read the [UI design baseline](../design/ui-system.md) first. It owns product simplicity, information hierarchy and local design choices; skills supply component/API, implementation and review methods. Use only the rows triggered by the task. A documentation-only component inventory does not itself require a React implementation workflow or prove a rendered UI review.
 
-mattpocock-skills methods are optional. User selection or a selected skill's applicable requirement is needed for TDD and multi-agent workflows. Availability, keywords or a document reference alone do not authorize those methods.
+mattpocock-skills methods are optional. Independent review and multi-agent work require an explicit user request for the current task under `AGENTS.md`. TDD requires explicit method selection. Availability, automatic skill routing or a document reference does not activate these workflows.
 
 ## Applying a skill
 
-1. Identify the task and deliverable; locate and read the current `SKILL.md`, then announce its purpose. If a path is stale, locate the current installation rather than claiming it was used.
+1. Identify the task and deliverable; read the applicable `SKILL.md` once and announce its purpose. Reuse its instructions and verified API lookups while they remain valid; refresh only changed or missing information. Resolve a stale path before claiming use.
 2. Follow its actual steps and conditional references. Reading a name or finding a URL is not completing the workflow.
 3. Deliver the required result and evidence; distinguish blocked, unverified and completed work.
 4. Honor user steering. A skill never authorizes redesign, additional functionality or real-data mutations beyond the accepted task.
 
-Combine skills only when their responsibilities are distinct and applicable. Follow explicit collaboration requirements of selected skills; otherwise do not start parallel agents merely because tools are available.
+Combine skills only when their responsibilities are distinct and applicable. Follow the delivery-first execution policy in `AGENTS.md`; skill loading alone never activates reviewer delegation, parallel agents or additional approval gates. Apply methods to the smallest complete user task.
 
 ## Optional methods
 
