@@ -46,7 +46,7 @@ export function SkillDocument({ content, html, overviewHtml, installation, prefe
   }
   const t = (cn: string, en: string) => zh ? cn : en;
   return <section className="flex min-w-0 flex-col gap-4" aria-label="SKILL.md" aria-busy={loading}>
-    <ToggleGroup type="single" size="sm" className="segmented-control" value={effectiveMode} onValueChange={value => void changeMode(value)} aria-label={t("文档显示", "Document view")}>
+    <ToggleGroup type="single" variant="document" size="sm" className="segmented-control" value={effectiveMode} onValueChange={value => void changeMode(value)} aria-label={t("文档显示", "Document view")}>
       {hasInstallation && <ToggleGroupItem value="installation"><TerminalIcon aria-hidden="true" />{t("安装", "Install")}</ToggleGroupItem>}
       {overviewHtml && <ToggleGroupItem value="overview"><AlignLeftIcon aria-hidden="true" />{t("概述", "Summary")}</ToggleGroupItem>}
       <Hint text={previewUnavailable ? t("技能正文暂不可用。", "The skill document is unavailable.") : undefined} disabled={previewUnavailable}><ToggleGroupItem value="preview" disabled={previewUnavailable}><EyeIcon aria-hidden="true" />{t("预览", "Preview")}</ToggleGroupItem></Hint>

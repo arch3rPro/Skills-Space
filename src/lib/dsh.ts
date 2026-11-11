@@ -1,6 +1,6 @@
 import { isNativeSkillForAgent, type InstalledSkill, type Inventory, type Target } from './upstream.ts';
-export type DshMembership={configurationPath:string|null;presetKey:string|null;preset:string|null;contextKey:string|null;shadowed?:boolean};
-export type DshPolicyInfo={status:'unavailable'|'not-installed'|'needs-setup'|'pending'|'active'|'error';issue:string|null;running?:boolean;problemPath?:string|null;pendingReason?:'reload'|'apply';configuration:string|null;policyFile:string;revision:string|null;canInstall:boolean;canSave:boolean;providerCount:number;migrationConflicts?:{file:string;name:string}[];configurations?:(DshPolicyInfo&{path:string;profile:string})[]};
+export type DshMembership={configurationPath:string|null;presetKey:string|null;preset:string|null;contextKey:string|null;source?:string;shadowed?:boolean};
+export type DshPolicyInfo={status:'unavailable'|'not-installed'|'needs-setup'|'pending'|'active'|'error';issue:string|null;running?:boolean;problemPath?:string|null;pendingReason?:'reload'|'apply';owner?:'companion'|'policy';configuration:string|null;policyFile:string;revision:string|null;canInstall:boolean;canSave:boolean;providerCount:number;migrationConflicts?:{file:string;name:string}[];configurations?:(DshPolicyInfo&{path:string;profile:string})[]};
 export type DshSkillState = {
   memberships?:DshMembership[];
   inScope?:boolean;declaredPath?:string|null;file:string;source:string;modelInvocable:boolean;userInvocable:boolean;
@@ -17,8 +17,9 @@ export type DshConfiguration = {
   installation?:'desktop'|'cli';runtimeVersion?:string|null;parentPreset?:boolean;parentChanges?:string[];key:string;path:string;openPath?:string;openExists?:boolean;profile:string;preset:string|null;provider:string;
   readOnlyFields?:string[];entryId?:string|null;unresolvedFields?:string[];source?:string;inherited?:Record<string,string|string[]|boolean|number|null>;resolved?:boolean;patchExists?:boolean;hasOverride?:boolean;canRestore?:boolean;canRestoreDirectories?:boolean;materializesInheritance?:boolean;bundledSkillDir?:string|null;watchUsePolling?:boolean;watchStabilityThresholdMs?:number;watchPollIntervalMs?:number;watchMaxProjects?:number;watchFollowSymlinks?:boolean;
   disabled:boolean|null;includeDefaultRoots:boolean|null;agentsHome:string|null;dshHome:string|null;
-  customSkillDirs:string[];watch:boolean|null;dynamic:boolean;editable:boolean;readOnlyReason:string|null;
+  customSkillDirs:string[];additionalDirectoryLayout?:DshAdditionalDirectoryLayout;watch:boolean|null;dynamic:boolean;editable:boolean;readOnlyReason:string|null;
 };
+export type DshAdditionalDirectoryLayout={entries:(string|null)[];builtin:boolean;dynamic:boolean};
 export type DshSnapshot = {
   dshHome:string;sharedHome:string;projectRoot:string|null;canonicalRoot:string;
   roots:{path:string;source:string;rank:number;contextKey:string|null;verified:boolean;inScope:boolean;exists:boolean;canCreate?:boolean;memberships?:DshMembership[]}[];
@@ -29,6 +30,7 @@ export type DshSnapshot = {
   warnings:string[];installIssue:string|null;contextIssue:string|null;contextKey:string|null;
   runtimeVersion:string|null;writableVersion:boolean;revision:string;runtimeVerified:false;
   aggregate?:boolean;
+  repairablePresets?:string[];
   policy?:DshPolicyInfo;
 };
 export type DshConfigurationFile={path:string;profile:string;installation?:'desktop'|'cli';exists:boolean};
@@ -220,7 +222,7 @@ export function filterDshSkills(skills:InstalledSkill[],configuration:string,pre
   return skills.filter(skill=>dshMatchesMembership(skill.dshState?.memberships,configuration,preset)).map(skill=>{
     const state=skill.dshState;if(!state?.memberships)return skill;
     const matching=state.memberships.filter(item=>dshMatchesMembership([item],configuration,preset));
-    return {...skill,dshState:{...state,shadowed:matching.length>0&&matching.every(item=>item.shadowed===true)}};
+    return {...skill,dshState:{...state,source:matching.find(item=>!item.shadowed)?.source??matching[0]?.source??state.source,shadowed:matching.length>0&&matching.every(item=>item.shadowed===true)}};
   });
 }
 
@@ -244,9 +246,4 @@ export function dshPolicySaveFeedback(policy:DshSnapshot['policy'],zh:boolean){
     ? (zh?'已保存，下次启动 DSH 时生效。':'Saved. Applies next time DSH starts.')
     : (zh?'已保存，请重启 DSH。':'Saved. Restart DSH to apply changes.');
   return zh?'已保存':'Saved';
-}
-
-export function dshPolicyNoticeRequired(policy:DshSnapshot['policy']){
-  if(!policy||policy.status==='active'||policy.status==='unavailable'&&policy.providerCount===0)return false;
-  return policy.status!=='pending'||policy.pendingReason==='reload'&&policy.running!==false;
 }

@@ -1,3 +1,5 @@
+import { directoryFields, expression, isProvider, providerConfig, directoryDeclarationStatus, additionalDirectoryLayout } from "./dsh-directory-config.mjs";
+export { directoryFields, expression, isProvider, providerConfig };
 // DSH configuration inspection. Reuse original app-boot composition; never boot a Profile.
 import { readFile, readdir, stat, lstat, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -10,7 +12,6 @@ import { parseDocument, visit, isAlias, Scalar } from './skills/node_modules/yam
 export const fingerprint = value => createHash('sha256').update(value).digest('hex');
 export const configurationState = Symbol('DSH configuration ownership');
 export const writableFields = ['customSkillDirs','includeDefaultRoots','watch','dshHome','agentsHome','watchUsePolling','watchStabilityThresholdMs','watchPollIntervalMs','watchMaxProjects','watchFollowSymlinks'];
-export const directoryFields = ['customSkillDirs','includeDefaultRoots','dshHome','agentsHome'];
 export const defaults = {customSkillDirs:[],includeDefaultRoots:true,watch:true,dshHome:null,agentsHome:null,watchUsePolling:false,watchStabilityThresholdMs:200,watchPollIntervalMs:100,watchMaxProjects:128,watchFollowSymlinks:true,providerName:'filesystem',bundledSkillDir:null};
 const absent = error => ['ENOENT','ENOTDIR'].includes(error.code);
 export async function text(path) {
@@ -21,7 +22,6 @@ export function yamlDocument(raw,expressions=true) {
   const doc=parseDocument(raw,{customTags:expressions?[{tag:'tag:yaml.org,2002:js',resolve:value=>({__jsExpr:value})}]:[]});
   if(doc.errors.length)throw Error('Invalid YAML');return doc;
 }
-export function expression(value){return !!value&&typeof value==='object'&&('__jsExpr' in value||Object.values(value).some(expression));}
 function complex(doc){let found=false;visit(doc,{Node(_key,node){if(isAlias(node)||node.anchor||node.value==='<<')found=true;}});return found;}
 function canonical(path){return process.platform==='darwin'?resolve(path).replace(/^\/(var|tmp)(?=\/|$)/,'/private/$1'):resolve(path);}
 export async function privateFile(path,missing=false){try{const info=await lstat(path);return info.isFile()&&!info.isSymbolicLink()&&info.nlink===1&&await realpath(path)===canonical(path);}catch(error){return missing&&absent(error)&&await realpath(dirname(path)).catch(()=>null)===canonical(dirname(path));}}
@@ -84,8 +84,6 @@ export function sameEntry(rows,item){
   }
   return {row,owner:parent.row,address};
 }
-export function isProvider(row){return !row.group&&(row.name==='@deepseek-ai/dsh-skill-filesystem'||row.name===pluginName);}
-export function providerConfig(row){return row?.name===pluginName?row.config?.filesystem??{}:row?.config??{};}
 export function setProviderConfig(row,value){if(row.name===pluginName)row.config={...row.config,filesystem:value};else row.config=value;}
 const entryName=row=>row.name===pluginName?'@deepseek-ai/dsh-skill-filesystem':row.name;
 export function configLocations(patches,id,name){
@@ -110,7 +108,7 @@ function changedPaths(current,inherited,path='',result=[]){
 }
 async function readOneConfiguration(home,dshHome,options={}) {
   const runtime=await installedRuntime(home,options.installation),version=options.runtimeVersion??runtime.version;
-  const dependencies=[],warnings=[],profiles=[],configurationFiles=[],presets=[],rows=[],contexts=new Map();let api=null;
+  const dependencies=[],warnings=[],profiles=[],configurationFiles=[],presets=[],rows=[],contexts=new Map(),profileStates=new Map();let api=null;
   async function dependency(path){if(dependencies.some(d=>d.path===path))return text(path).catch(error=>{if(absent(error))return null;throw error;});if(dependencies.length>=500)throw Error('DSH dependency limit exceeded');try{const raw=await text(path);dependencies.push({path,revision:fingerprint(raw)});return raw;}catch(error){if(!absent(error))throw error;dependencies.push({path,revision:'missing'});return null;}}
   try{if(runtime.anchor){await dependency(runtime.anchor);const modulePath=createRequire(runtime.anchor).resolve('@deepseek-ai/dsh-app-boot');await dependency(modulePath);api=await import(pathToFileURL(modulePath).href);if(typeof api.composeEntries!=='function'||typeof api.resolveBundleDir!=='function')api=null;}}catch{}
   // Verify the original composition contract instead of disabling an entire new release.
@@ -143,6 +141,9 @@ async function readOneConfiguration(home,dshHome,options={}) {
         }catch{}
       }
       const lower=layers.flatMap(l=>l.patches),base=api.composeEntries([lower,patches]),effective=api.composeEntries([lower,patches,homePatches]);
+      if(writableVersion&&!homeError&&!incomplete&&raw!==null&&await privateFile(manifestPath)&&await privateFile(path)){
+        profileStates.set(path,{path,manifestPath,anchor:runtime.anchor,api,raw,doc,patches,lower,homePatches,effective});
+      }
       const flat=entries(effective);
       const identity=item=>JSON.stringify([...item.parents,item.row].map(row=>[row.id,entryName(row),row.group===true]));
       const counts=new Map();for(const item of flat)counts.set(identity(item),(counts.get(identity(item))??0)+1);
@@ -151,7 +152,7 @@ async function readOneConfiguration(home,dshHome,options={}) {
         const config=item.row.config;
         if(typeof config?.id!=='string'||!config.id.trim())continue;
         const key=runtime.installation+':preset:'+fingerprint(JSON.stringify([manifestPath,config.id,identity(item)])).slice(0,24);
-        const preset={key,path,profile:dir.name,installation:runtime.installation,preset:config.id,configurationKeys:[],directoryStatus:Array.isArray(config.plugins)?'none':'unknown',disabled:expression(item.row.disabled)||item.parents.some(parent=>expression(parent.disabled))?null:item.row.disabled===true||item.parents.some(parent=>parent.disabled===true)};
+        const preset={key,path,profile:dir.name,installation:runtime.installation,preset:config.id,configurationKeys:[],directoryStatus:directoryDeclarationStatus(config.plugins),disabled:expression(item.row.disabled)||item.parents.some(parent=>expression(parent.disabled))?null:item.row.disabled===true||item.parents.some(parent=>parent.disabled===true)};
         if(typeof config.name==='string')preset.presetName=config.name;
         if(typeof config.description==='string')preset.presetDescription=config.description;
         if(typeof config.order==='number'&&Number.isFinite(config.order))preset.order=config.order;
@@ -178,6 +179,7 @@ async function readOneConfiguration(home,dshHome,options={}) {
         // Raw configurations remain private to this process; only known skill settings reach the UI.
         const unresolvedFields=Object.keys(defaults).filter(field=>Object.hasOwn(config,'__jsExpr')||expression(config[field]));
         const safe={};for(const [field,value]of Object.entries(normalized))safe[field]=unresolvedFields.includes(field)?(Array.isArray(defaults[field])?[]:null):value;
+        safe.additionalDirectoryLayout=additionalDirectoryLayout(config);
         const safeInherited={};for(const [field,value]of Object.entries(inherited))safeInherited[field]=expression(value)?null:value;
         const parentLower=owner?sameEntry(inheritedTree,{...item,row:owner,owner:null})?.row?.config:null;
         const parentChanges=owner&&own?changedPaths(owner.config,parentLower):[];
@@ -193,7 +195,7 @@ async function readOneConfiguration(home,dshHome,options={}) {
   }
   dependencies.sort((a,b)=>a.path.localeCompare(b.path));
   presets.sort((a,b)=>a.path.localeCompare(b.path)||((a.order??Infinity)-(b.order??Infinity)||a.preset.localeCompare(b.preset)));
-  return {installation:runtime.installation,runtimeVersion:version,writableVersion,profiles,configurationFiles,presets,configurations:rows,contexts,dependencies,warnings,revision:fingerprint(JSON.stringify(dependencies)),homeError,apiAvailable:!!api};
+  return {installation:runtime.installation,runtimeVersion:version,writableVersion,profiles,configurationFiles,presets,configurations:rows,contexts,profileStates,dependencies,warnings,revision:fingerprint(JSON.stringify(dependencies)),homeError,apiAvailable:!!api};
 }
 
 export async function readConfiguration(home,dshHome,options={}) {
@@ -207,5 +209,5 @@ export async function readConfiguration(home,dshHome,options={}) {
   }
   const own=values.find(value=>value.installation===primary.installation)??values[0];
   const dependencies=[...new Map(values.flatMap(value=>value.dependencies).map(value=>[value.path,value])).values()].sort((a,b)=>a.path.localeCompare(b.path));
-  return {...own,profiles:[...new Set(values.flatMap(value=>value.profiles))],configurationFiles:values.flatMap(value=>value.configurationFiles),presets:values.flatMap(value=>value.presets),configurations:values.flatMap(value=>value.configurations),contexts:new Map(values.flatMap(value=>[...value.contexts])),warnings:[...new Set(values.flatMap(value=>value.warnings))],dependencies,revision:fingerprint(JSON.stringify(dependencies))};
+  return {...own,profiles:[...new Set(values.flatMap(value=>value.profiles))],configurationFiles:values.flatMap(value=>value.configurationFiles),presets:values.flatMap(value=>value.presets),configurations:values.flatMap(value=>value.configurations),contexts:new Map(values.flatMap(value=>[...value.contexts])),profileStates:new Map(values.flatMap(value=>[...value.profileStates])),warnings:[...new Set(values.flatMap(value=>value.warnings))],dependencies,revision:fingerprint(JSON.stringify(dependencies))};
 }

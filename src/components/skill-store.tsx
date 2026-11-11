@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { NativeSelect, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { InventoryCard, InventoryCardHeader, InventoryCardFooter } from '@/components/inventory-card';
@@ -25,6 +25,20 @@ import { cn } from '@/lib/utils';
 
 const SkillDocument = lazy(() => import('@/components/skill-document').then(module => ({ default: module.SkillDocument })));
 type Detail = { skill: MarketplaceSkill; metric: MarketplaceBoard | 'search'; loading: boolean; document: WebsiteDocument | null; content: string | null; missing: boolean };
+export type SkillStoreBackend = {
+  board: (board: MarketplaceBoard, page: number, pageSize: number, refresh: boolean) => Promise<MarketplacePage>;
+  search: (query: string, owner: string) => Promise<MarketplaceSkill[]>;
+  document: (id: string, requireMetadata: boolean) => Promise<WebsiteDocument>;
+  markdown: (id: string) => Promise<string>;
+  open: (url: string) => Promise<void>;
+};
+const desktopBackend: SkillStoreBackend = {
+  board: (board, page, pageSize, refresh) => invoke('fetch_skill_leaderboard', { board, page, pageSize, refresh }),
+  search: (query, owner) => invoke('upstream_find', { query, owner }),
+  document: (id, requireMetadata) => invoke('fetch_skill_document', { id, requireDocument: false, ...(requireMetadata ? { requireMetadata } : {}) }),
+  markdown: id => invoke('fetch_skill_markdown', { id }),
+  open: openUrl,
+};
 type Props = {
   zh: boolean;
   initialPageSize: number;
@@ -32,10 +46,13 @@ type Props = {
   disabled: boolean;
   session: RefObject<MarketplaceSession>;
   onInstall: (source?: string, agents?: string[], skills?: string[]) => void;
+  backend?: SkillStoreBackend;
+  embedded?: boolean;
+  getScrollContainer?: () => HTMLElement | null;
 };
 const scrollContainer = () => document.getElementById('store-list') ?? document.getElementById('main-content');
 
-function StoreDescription({ skill, cache, load, zh }: { skill: MarketplaceSkill; cache: Map<string, string>; load: DescriptionLoader; zh: boolean }) {
+function StoreDescription({ skill, cache, load, zh, getScrollContainer }: { skill: MarketplaceSkill; cache: Map<string, string>; load: DescriptionLoader; zh: boolean; getScrollContainer: () => HTMLElement | null }) {
   const ref = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>(cache.has(skill.id) || skill.description ? 'ready' : 'loading');
   const [description, setDescription] = useState(cache.get(skill.id) || skill.description || null);
@@ -56,10 +73,10 @@ function StoreDescription({ skill, cache, load, zh }: { skill: MarketplaceSkill;
         if (cache.has(skill.id)) { setDescription(cache.get(skill.id) || null); setState('ready'); }
         else if (!request.current) read();
       } else { const current = request.current; request.current = null; current?.release(); }
-    }, { root: scrollContainer(), rootMargin: '120px' });
+    }, { root: getScrollContainer(), rootMargin: '120px' });
     if (ref.current) observer.observe(ref.current);
     return () => { alive.current = false; observer.disconnect(); const current = request.current; request.current = null; current?.release(); };
-  }, [cache, skill.id, skill.description, read]);
+  }, [cache, skill.id, skill.description, read, getScrollContainer]);
   return <div ref={ref} className="min-h-10">
     {state === 'loading' ? <div className="flex flex-col gap-2" role="status" aria-label={zh ? '正在读取简介…' : 'Loading description…'}><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-2/3" /></div>
       : description ? <OverflowText text={description} className="line-clamp-2 leading-5" />
@@ -75,16 +92,17 @@ function InstallationChange({ change, zh, compact = false }: { change: number | 
   return <Hint text={value.description} focusable><span className={cn("inline-flex items-center gap-1 whitespace-nowrap tabular-nums text-muted-foreground", compact && "text-xs")} role="img" aria-label={value.description}><Icon className="size-3.5" aria-hidden="true" /><span>{compact ? compactInstalls(value.amount, zh) : value.amount.toLocaleString(zh ? 'zh-CN' : 'en-US')}</span></span></Hint>;
 }
 
-function StoreCards({ skills, metric, descriptions, loadDescription, disabled, installingSource, zh, onOpen, onInstall }: {
+function StoreCards({ skills, metric, descriptions, loadDescription, disabled, installingSource, zh, onOpen, onInstall, getScrollContainer }: {
   skills: MarketplaceSkill[]; metric: MarketplaceBoard | 'search'; descriptions: Map<string, string>;
   loadDescription: DescriptionLoader;
+  getScrollContainer: () => HTMLElement | null;
   disabled: boolean; installingSource: string | null; zh: boolean; onOpen: (skill: MarketplaceSkill) => void; onInstall: (skill: MarketplaceSkill) => void;
 }) {
   return <div className="skill-grid grid gap-4">{skills.map(skill => {
     const SourceIcon = isWebsiteSource(skill.source) ? Globe2Icon : GitBranchIcon;
     return <InventoryCard className="@container" key={skill.id} onOpen={() => onOpen(skill)}>
       <InventoryCardHeader heading={<button type="button" className="block w-full min-w-0 cursor-pointer text-left" onClick={() => onOpen(skill)} aria-label={`${zh ? '查看技能' : 'View skill'} ${skill.name}`}><OverflowText text={skill.name} className="block truncate" /></button>}
-        description={<StoreDescription skill={skill} cache={descriptions} load={loadDescription} zh={zh} />} />
+        description={<StoreDescription skill={skill} cache={descriptions} load={loadDescription} zh={zh} getScrollContainer={getScrollContainer} />} />
       <InventoryCardFooter metadata={<Hint text={skill.source} focusable><span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"><SourceIcon className="size-3.5 shrink-0" aria-hidden="true" /><OverflowText text={skill.source} className="truncate" /></span></Hint>}>
         <Hint text={marketplaceMetric(skill, metric, zh)} focusable><span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs tabular-nums text-muted-foreground"><DownloadIcon className="size-3.5" aria-hidden="true" />{compactInstalls(skill.installs, zh)}</span></Hint>
         {metric === 'hot' && <InstallationChange change={skill.change} zh={zh} compact />}
@@ -99,14 +117,14 @@ function StoreCards({ skills, metric, descriptions, loadDescription, disabled, i
   })}</div>;
 }
 
-export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session, onInstall }: Props) {
-  const [loadDocument] = useState(() => session.current.documentLoader ??= createResourceLoader(session.current.documents, id => invoke<WebsiteDocument>('fetch_skill_document', { id, requireDocument: false })));
+export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session, onInstall, backend = desktopBackend, embedded = false, getScrollContainer = scrollContainer }: Props) {
+  const [loadDocument] = useState(() => session.current.documentLoader ??= createResourceLoader(session.current.documents, id => backend.document(id, false)));
   const [loadDescription] = useState(() => session.current.descriptionLoader ??= createDescriptionLoader(session.current.descriptions, async id => {
     const document = await loadDocument(id);
     return document.description || (document.html ? websiteIntroduction(document.html) : null);
   }));
-  const [loadMetadata] = useState(() => session.current.metadataLoader ??= createResourceLoader(session.current.documents, id => invoke<WebsiteDocument>('fetch_skill_document', { id, requireDocument: false, requireMetadata: true }), document => document.metadata != null));
-  const [loadMarkdown] = useState(() => session.current.markdownLoader ??= createMarkdownLoader(session.current.markdown, id => invoke<string>('fetch_skill_markdown', { id })));
+  const [loadMetadata] = useState(() => session.current.metadataLoader ??= createResourceLoader(session.current.documents, id => backend.document(id, true), document => document.metadata != null));
+  const [loadMarkdown] = useState(() => session.current.markdownLoader ??= createMarkdownLoader(session.current.markdown, backend.markdown));
   const t = (cn: string, en: string) => zh ? cn : en;
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [board, setBoard] = useState(session.current.board);
@@ -150,7 +168,7 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
   const previousSearch = searching && !searchData ? searchResult : null;
 
   useEffect(() => { if (initialPageSize !== pageSize) { setPageSize(initialPageSize); setPage(1); setSearchWindow({ key: searchKey, page: 1 }); } }, [initialPageSize]);
-  useEffect(() => { setJumpPage(''); scrollContainer()?.scrollTo({ top: 0 }); }, [board, query, owner, pageSize]);
+  useEffect(() => { setJumpPage(''); getScrollContainer()?.scrollTo({ top: 0 }); }, [board, query, owner, pageSize]);
   useEffect(() => { setSearchWindow(previous => previous.key !== searchKey || previous.page !== searchWindowData.page ? { key: searchKey, page: searchWindowData.page } : previous); }, [searchKey, searchWindowData.page]);
   useEffect(() => { session.current.searchPage = { key: searchKey, page: searchWindowData.page }; }, [session, searchKey, searchWindowData.page]);
   useEffect(() => { session.current.board = board; session.current.page = page; session.current.query = query; session.current.owner = owner; }, [board, page, query, owner, session]);
@@ -175,17 +193,17 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
     async function load() {
       try {
         if (searching) {
-          const skills = await invoke<MarketplaceSkill[]>('upstream_find', { query, owner });
+          const skills = await backend.search(query, owner);
           const cache = session.current.searches;
           if (cache.size >= 10) { const oldest = cache.keys().next().value; if (oldest !== undefined) cache.delete(oldest); }
           cache.set(searchKey, { skills, at: Date.now() });
           if (!cancelled) setSearchResult({ key: searchKey, query, owner, skills });
         } else {
-          let result = await invoke<MarketplacePage>('fetch_skill_leaderboard', { board, page, pageSize, refresh });
+          let result = await backend.board(board, page, pageSize, refresh);
           session.current.boards.set(`${board}:${pageSize}:${result.page}`, result);
           if (!cancelled) { if (result.page !== page) setPage(result.page); else setBoardResult({ key: boardKey, data: result }); }
           if (result.stale && !refresh && !cancelled) {
-            result = await invoke<MarketplacePage>('fetch_skill_leaderboard', { board, page, pageSize, refresh: true });
+            result = await backend.board(board, page, pageSize, true);
             session.current.boards.set(`${board}:${pageSize}:${result.page}`, result);
             if (!cancelled) { if (result.page !== page) setPage(result.page); else setBoardResult({ key: boardKey, data: result }); }
           }
@@ -207,7 +225,7 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
     const content = session.current.markdown.get(skill.id) ?? null;
     const next: Detail = { skill, metric, loading: content === null, document: cached ?? null, content, missing: false };
     setDetail(next); reportDetailError('');
-    scrollContainer()?.scrollTo({ top: 0 });
+    getScrollContainer()?.scrollTo({ top: 0 });
     // Keep the existing introduction request alive when its card unmounts.
     const lease = loadDescription(skill.id);
     detailLease.current = lease;
@@ -216,7 +234,10 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
     }, reason => {
       if (id === detailRequest.current) reportDetailError(String(reason), zh ? '技能简介读取失败，返回列表可重试。' : 'Could not read the introduction. Return to the list to retry.');
     }).finally(() => { if (detailLease.current === lease) detailLease.current = null; });
-    const information = loadDocument(skill.id).then(document => document.metadata != null ? document : loadMetadata(skill.id));
+    const information = loadDocument(skill.id).then(
+      document => document.metadata != null ? document : loadMetadata(skill.id),
+      () => loadMetadata(skill.id),
+    );
     void information.then(document => {
       if (id === detailRequest.current) setDetail(current => current ? { ...current, document } : current);
     }, reason => {
@@ -246,12 +267,12 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
         }
       } finally { if (id === detailRequest.current) detailLease.current = null; }
     }
-  }, [loadMarkdown, loadDescription, loadDocument, loadMetadata, reportDetailError, session, zh]);
+  }, [loadMarkdown, loadDescription, loadDocument, loadMetadata, reportDetailError, session, zh, getScrollContainer]);
 
   function back() {
     ++detailRequest.current; detailLease.current?.release(); detailLease.current = null;
     setDetail(null); reportDetailError('');
-    requestAnimationFrame(() => scrollContainer()?.scrollTo({ top: scrollPosition.current }));
+    requestAnimationFrame(() => getScrollContainer()?.scrollTo({ top: scrollPosition.current }));
   }
   function clearSearch() { setSearchWindow({ key: '', page: 1 }); setDraft(''); setQuery(''); setOwner(''); setOwnerDraft(''); setOwnerOpen(false); }
   function changeBoard(value: string) { if (value !== 'alltime' && value !== 'trending' && value !== 'hot') return; clearSearch(); setBoard(value); setPage(value === board ? page : 1); }
@@ -274,12 +295,15 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
     try { external(isWebsiteSource(skill.source) ? await resolveSource(skill) : session.current.documents.get(skill.id)?.metadata?.repository?.url || marketplaceSourceUrl(skill)); }
     catch (reason) { reportDetailError(String(reason), t('无法读取技能来源，请重试。', 'Could not read the skill source. Try again.')); }
   }
+  function selectPageSize(value: string) {
+    void onPageSize(Number(value)).catch(reason => reportError(String(reason), t('每页数量未保存，请重试。', 'Could not save page size. Try again.')));
+  }
   function changePage(value: number) {
     setJumpPage('');
     if (searching) setSearchWindow({ key: searchKey, page: value }); else setPage(value);
-    scrollContainer()?.scrollTo({ top: 0 });
+    getScrollContainer()?.scrollTo({ top: 0 });
   }
-  function external(url: string) { void openUrl(url).catch(reason => notifyError(String(reason), zh)); }
+  function external(url: string) { void backend.open(url).catch(reason => notifyError(String(reason), zh)); }
 
   const detailMetadata = detail ? session.current.documents.get(detail.skill.id)?.metadata ?? detail.document?.metadata : null;
   const detailMetric = detail ? marketplaceMetricParts(detail.skill, detail.metric, zh) : null;
@@ -307,8 +331,8 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
   </SkillDetail>;
 
   return <section className="inventory-content store-page flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-hidden">
-    <header className="shrink-0"><h1>{t('技能商店', 'Skill store')}</h1></header>
-    <div className="layout-toolbar flex shrink-0 items-center gap-3">
+    {!embedded && <header className="shrink-0"><h1>{t('技能商店', 'Skill store')}</h1></header>}
+    <div className={cn("flex shrink-0 items-center gap-3", embedded ? "flex-wrap" : "layout-toolbar")}>
       <ToggleGroup type="single" size="xs" className="segmented-control shrink-0" value={searching ? '' : board} onValueChange={changeBoard} aria-label={t('排行榜', 'Leaderboard')}>
         <ToggleGroupItem value="alltime">{t('总榜', 'All time')}</ToggleGroupItem><ToggleGroupItem value="trending">{t('趋势', 'Trending')}</ToggleGroupItem><ToggleGroupItem value="hot">{t('热门', 'Hot')}</ToggleGroupItem>
       </ToggleGroup>
@@ -322,15 +346,17 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
     </div>
     {(searching || draft.trim().length === 1 || error) && <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
       <span role="status">{draft.trim().length === 1 ? t('至少输入 2 个字符进行搜索', 'Enter at least 2 characters to search') : previousSearch ? t(`“${query}”${error ? '未加载' : '正在搜索'}；下方为上次“${previousSearch.query}”${previousSearch.owner ? `（${previousSearch.owner}）` : ''}的结果`, `“${query}” ${error ? 'could not be loaded' : 'is loading'}; showing previous results for “${previousSearch.query}”${previousSearch.owner ? ` (${previousSearch.owner})` : ''}`) : loading ? t('正在搜索…', 'Searching…') : searching && searchData ? t(`“${query}” · ${searchData.length} 项${searchData.length === 100 ? '（最多显示 100 项）' : ''}`, `“${query}” · ${searchData.length} results${searchData.length === 100 ? ' (up to 100)' : ''}`) : null}</span>
-      <div className="flex items-center gap-2">{error && <Button size="sm" variant="outline" onClick={refresh}>{t('重试', 'Retry')}</Button>}{searching && <Popover open={ownerOpen} onOpenChange={setOwnerOpen}><PopoverTrigger asChild><Button size="sm" variant="ghost">{owner || t('来源', 'Source')}</Button></PopoverTrigger><PopoverContent><form className="flex flex-col gap-3" onSubmit={event => { event.preventDefault(); setOwner(ownerDraft.trim()); setOwnerOpen(false); }}><Field><FieldLabel htmlFor="store-owner">{t('GitHub 用户或组织', 'GitHub user or organization')}</FieldLabel><Input id="store-owner" value={ownerDraft} maxLength={39} onChange={event => setOwnerDraft(event.target.value)} /></Field><div className="flex justify-end gap-2">{owner && <Button variant="ghost" onClick={() => { setOwner(''); setOwnerDraft(''); setOwnerOpen(false); }}>{t('清除', 'Clear')}</Button>}<Button type="submit">{t('应用', 'Apply')}</Button></div></form></PopoverContent></Popover>}</div>
+      <div className="flex items-center gap-2">{error && (!embedded || Boolean(items?.length)) && <Button size="sm" variant="outline" onClick={refresh}>{t('重试', 'Retry')}</Button>}{searching && <Popover open={ownerOpen} onOpenChange={setOwnerOpen}><PopoverTrigger asChild><Button size="sm" variant="ghost">{owner || t('来源', 'Source')}</Button></PopoverTrigger><PopoverContent><form className="flex flex-col gap-3" onSubmit={event => { event.preventDefault(); setOwner(ownerDraft.trim()); setOwnerOpen(false); }}><Field><FieldLabel htmlFor="store-owner">{t('GitHub 用户或组织', 'GitHub user or organization')}</FieldLabel><Input id="store-owner" value={ownerDraft} maxLength={39} onChange={event => setOwnerDraft(event.target.value)} /></Field><div className="flex justify-end gap-2">{owner && <Button variant="ghost" onClick={() => { setOwner(''); setOwnerDraft(''); setOwnerOpen(false); }}>{t('清除', 'Clear')}</Button>}<Button type="submit">{t('应用', 'Apply')}</Button></div></form></PopoverContent></Popover>}</div>
     </div>}
     <div id="store-list" className="app-content min-w-0">
     {initialLoading ? <LoadingCards variant="inventory" count={6} label={searching ? t('正在搜索…', 'Searching…') : t('正在读取排行榜…', 'Loading leaderboard…')} className="skill-grid" />
-      : items?.length ? <StoreCards key={reload} skills={shownItems ?? []} metric={searching ? 'search' : board} descriptions={session.current.descriptions} loadDescription={loadDescription} zh={zh} disabled={installDisabled} installingSource={installingSource} onInstall={skill => void installSkill(skill)} onOpen={skill => void inspectDetail(skill, searching ? 'search' : board, scrollContainer()?.scrollTop ?? 0)} />
+      : items?.length ? <StoreCards getScrollContainer={getScrollContainer} key={reload} skills={shownItems ?? []} metric={searching ? 'search' : board} descriptions={session.current.descriptions} loadDescription={loadDescription} zh={zh} disabled={installDisabled} installingSource={installingSource} onInstall={skill => void installSkill(skill)} onOpen={skill => void inspectDetail(skill, searching ? 'search' : board, getScrollContainer()?.scrollTop ?? 0)} />
       : <Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><SearchIcon aria-hidden="true" /></EmptyMedia><EmptyTitle>{error ? t('无法加载技能', 'Could not load skills') : searching ? t('未找到匹配的技能', 'No matching skills') : t('暂无技能', 'No skills')}</EmptyTitle>{searching && !error && <EmptyDescription>{t('试试其他关键词，或清除来源筛选。', 'Try another keyword or clear the source filter.')}</EmptyDescription>}</EmptyHeader><EmptyContent>{error ? <Button variant="outline" onClick={refresh}>{t('重试', 'Retry')}</Button> : searching && <Button variant="outline" onClick={clearSearch}>{t('返回排行榜', 'Back to leaderboard')}</Button>}</EmptyContent></Empty>}
     </div>
     <nav className="flex shrink-0 flex-wrap items-center justify-center gap-3" aria-label={searching ? t('搜索结果分页', 'Search results pagination') : t('榜单分页', 'Leaderboard pagination')}>
-      <Select value={String(pageSize)} disabled={loading || disabled} onValueChange={value => { void onPageSize(Number(value)).catch(reason => reportError(String(reason), t('每页数量未保存，请重试。', 'Could not save page size. Try again.'))); }}><SelectTrigger aria-label={t('每页数量', 'Items per page')}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{[12,24,48].map(size => <SelectItem key={size} value={String(size)}>{t(`${size} 项 / 页`, `${size} / page`)}</SelectItem>)}</SelectGroup></SelectContent></Select>
+      {embedded ? <NativeSelect value={pageSize} disabled={loading || disabled} aria-label={t('每页数量', 'Items per page')} onChange={event => selectPageSize(event.target.value)}>
+        {[12,24,48].map(size => <option key={size} value={size}>{t(`${size} 项 / 页`, `${size} / page`)}</option>)}
+      </NativeSelect> : <Select value={String(pageSize)} disabled={loading || disabled} onValueChange={selectPageSize}><SelectTrigger aria-label={t('每页数量', 'Items per page')}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{[12,24,48].map(size => <SelectItem key={size} value={String(size)}>{t(`${size} 项 / 页`, `${size} / page`)}</SelectItem>)}</SelectGroup></SelectContent></Select>}
       <Button size="icon" variant="outline" aria-label={t('上一页', 'Previous page')} disabled={!hasPageCount || currentPage <= 1 || loading} onClick={() => changePage(currentPage - 1)}><ChevronLeftIcon aria-hidden="true" /></Button>
       <span className="text-sm tabular-nums text-muted-foreground">{currentPage} / {hasPageCount ? totalPages : '—'}</span>
       <Button size="icon" variant="outline" aria-label={t('下一页', 'Next page')} disabled={!hasPageCount || currentPage >= totalPages || loading} onClick={() => changePage(currentPage + 1)}><ChevronRightIcon aria-hidden="true" /></Button>

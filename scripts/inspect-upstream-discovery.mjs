@@ -1,15 +1,18 @@
 // Read-only original discovery: no CLI entry, repository scripts or mutation APIs.
 import * as fs from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
-import { parse } from './skills/node_modules/yaml/dist/index.js';
+import { fileURLToPath } from 'node:url';
 
 try {
+  const packagePath = process.argv[6] || fileURLToPath(new URL('./skills/package.json', import.meta.url));
+  const { parse } = createRequire(packagePath)('yaml');
   const root = await fs.realpath(process.argv[2]);
   const search = await fs.realpath(process.argv[3]);
   const includeInternal = process.argv[4] === 'true';
   const filter = process.argv[5] || null;
-  const code = await fs.readFile(new URL('./skills/dist/cli.mjs', import.meta.url), 'utf8');
+  const code = await fs.readFile(join(dirname(packagePath), 'dist/cli.mjs'), 'utf8');
   function block(start, end) {
     const a = code.indexOf(start), b = code.indexOf(end, a);
     if (a < 0 || b < a) throw Error('Review pinned discovery boundaries.');

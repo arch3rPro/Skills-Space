@@ -2,10 +2,7 @@ import { SparklesIcon, HandIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Hint } from '@/components/hint';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FlowError } from '@/components/flow-error';
-import { displayHomePath } from '@/lib/upstream';
-import { dshInvocationChannels, dshPolicyNoticeRequired, type DshSkillState, type DshSnapshot, type DshPolicyAction } from '@/lib/dsh';
+import { dshInvocationChannels, type DshSkillState, type DshPolicyAction } from '@/lib/dsh';
 
 function blocker(state:DshSkillState,zh:boolean){return state.policyBlocker==='error'?(zh?'技能设置无法读取，请检查设置文件':'Skill settings could not be read; check the settings file'):state.policyBlocker==='unavailable'?(zh?'当前配置无法使用启停和调用设置':'Enablement and invocation settings are unavailable for this configuration'):state.policyBlocker==='needs-setup'?(zh?'请先安装并启用 DSH 配套插件':'Install and enable the DSH companion plugin first'):(zh?'安装配套插件后可设置':'Install the companion plugin to configure');}
 
@@ -28,25 +25,4 @@ export function DshPolicyChannels({state,name,disabled,project,zh,onChange}:Prop
     const Icon=model?SparklesIcon:HandIcon;
     return <Hint key={channel} stable text={hint+(project&&state.canSetPolicy?(zh?'；使用同一文件的其他配置和项目也会同步改变':'; other configurations and projects using this file share the change'):'')} disabled={unavailable}><Button variant="ghost" size="icon-sm" className={allowed?undefined:'text-muted-foreground opacity-50'} disabled={unavailable} aria-label={`${name} · ${label}`} aria-pressed={allowed} onClick={()=>onChange(`${channel}-${allowed?'off':'on'}`)}><Icon aria-hidden="true"/></Button></Hint>;
   })}</>;
-}
-export function DshPolicyNotice({policy,disabled,zh,home,onInstall,onOpenDirectory,onRefresh}:{policy:DshSnapshot['policy'];disabled:boolean;zh:boolean;home:string;onInstall:()=>void;onOpenDirectory:(path:string)=>void;onRefresh:()=>void}){
-  if(!policy||!dshPolicyNoticeRequired(policy))return null;
-  const t=(cn:string,en:string)=>zh?cn:en;
-  const install=policy.canInstall&&['not-installed','needs-setup'].includes(policy.status);
-  const conflicts=policy.migrationConflicts??[];
-  const affected=(policy.configurations??[]).filter(item=>item.status===policy.status&&(policy.status!=='pending'||item.pendingReason==='reload'&&item.running!==false));
-  const paths=affected.length?affected.map(item=>item.path):[policy.configuration??policy.problemPath??policy.policyFile];
-  const actions=<div className="flex flex-wrap items-center gap-2">
-    {install&&<Button size="sm" variant="outline" disabled={disabled} onClick={onInstall}>{t('安装并启用','Install and enable')}</Button>}
-    {policy.problemPath&&<Button size="sm" variant="outline" disabled={disabled} onClick={()=>onOpenDirectory(policy.problemPath!)}>{t('打开设置目录','Open settings folder')}</Button>}
-    {policy.status==='unavailable'&&paths.map(path=><Button key={path} size="sm" variant="outline" disabled={disabled} onClick={()=>onOpenDirectory(path)}>{t('打开配置目录','Open configuration folder')} · {displayHomePath(path,home)}</Button>)}
-    <Button size="sm" variant="outline" disabled={disabled} onClick={onRefresh}>{t('刷新','Refresh')}</Button>
-  </div>;
-  if(policy.status==='error'||policy.status==='unavailable'){
-    const errorPaths=[...new Set([...paths,policy.problemPath,policy.policyFile,...affected.flatMap(item=>[item.problemPath,item.policyFile])].filter((path):path is string=>!!path))];
-    const details=[...errorPaths.map(path=>displayHomePath(path,home)),...affected.map(item=>item.issue?`${displayHomePath(item.path,home)}: ${item.issue}`:null),policy.issue,...conflicts.map(item=>`${item.name}: ${displayHomePath(item.file,home)}`)].filter(Boolean).join('\n');
-    return <div className="flex flex-col gap-3">{paths.map(path=><p key={path} className="break-all font-mono text-xs">{displayHomePath(path,home)}</p>)}<FlowError zh={zh} title={t('DSH 技能设置不可用','DSH skill settings unavailable')} help={conflicts.length?t('同一技能存在不同的旧设置，请查看错误详情，处理后刷新。','A skill has conflicting previous settings. Review the error details, resolve the conflict and refresh.'):t('请查看错误详情，检查对应配置和设置文件后刷新。','Review the error details, check the affected configuration and settings file, then refresh.')} message={details}/>{actions}</div>;
-  }
-  const text=policy.status==='pending'?t('请重启 DSH，使技能设置生效。','Restart DSH to apply skill settings.'):t('安装 DSH 配套插件后，可管理技能启停和调用方式。','Install the DSH companion plugin to manage skill enablement and invocation.');
-  return <Alert><AlertDescription><p>{text}</p>{paths.map(path=><p key={path} className="break-all font-mono text-xs">{displayHomePath(path,home)}</p>)}{actions}</AlertDescription></Alert>;
 }

@@ -590,3 +590,18 @@ test('search uses the selected 12 24 or 48 page size without reordering or dropp
  }
  assert.equal(searchPageItems(Array.from({length:100}),1).items.length,12,'omitted page size retains the default');
 });
+
+
+test("DSH managed states preserve unavailable observations and source URL search", async () => {
+  const { managedSkillEnabled, filterManagedSkills } = await import("./managed-skill-filters.ts");
+  const base: InstalledSkill = { name: "managed-dsh", path: "/shared", agents: ["deepseek-harness"], source: null, sourceUrl: "https://example.org/source-repository", description: "", dshState: { file: "/shared/SKILL.md", source: "user-agents", shadowed: false, cliAddressable: true, configured: true, reason: null, modelInvocable: true, userInvocable: true, policyEnabled: true } };
+  const on = base, off = { ...base, dshState: { ...base.dshState!, policyEnabled: false } };
+  const unknown = { ...off, dshState: { ...off.dshState, policyBlocker: "error" } };
+  assert.equal(managedSkillEnabled(on, "deepseek-harness"), true);
+  assert.equal(managedSkillEnabled(off, "deepseek-harness"), false);
+  assert.equal(managedSkillEnabled(unknown, "deepseek-harness"), null);
+  assert.equal(managedSkillEnabled({ ...base, dshState: undefined }, "deepseek-harness"), null);
+  assert.deepEqual(filterManagedSkills([on, off, unknown], "all", "disabled", "deepseek-harness"), [off]);
+  const observed = { ...inventory, skills: [base] };
+  assert.deepEqual(visibleSkills(observed, "SOURCE-REPOSITORY", ""), [base]);
+});

@@ -6,7 +6,7 @@ import { skillDocumentUrl, skillMarkdownBody, remarkSkillHeadings, documentHeadi
 import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import { CodeBlock, CodeBlockActions, CodeBlockContent, CodeBlockCopyButton, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from "@/components/ui/code-block";
 
-const DocumentContext = createContext({ zh: false, onOpenExternal: (_url: string) => {} });
+const DocumentContext = createContext({ zh: false, allowRemoteImages: true, onOpenExternal: (_url: string) => {} });
 
 function MarkdownCodeBlock({ node, children }: ComponentProps<"pre"> & ExtraProps) {
   const element = node?.children.find(child => child.type === "element" && child.tagName === "code");
@@ -50,17 +50,18 @@ const components: Components = {
     const url = skillDocumentUrl(href);
     return url ? <a href={url} onClick={event => { event.preventDefault(); onOpenExternal(url); }}>{children}</a> : <span>{children}</span>;
   },
-  img: ({ src, alt }) => {
-    const url = typeof src === "string" ? skillDocumentUrl(src) : undefined;
+  img: function MarkdownImage({ src, alt }) {
+    const { allowRemoteImages } = useContext(DocumentContext);
+    const url = allowRemoteImages && typeof src === "string" ? skillDocumentUrl(src) : undefined;
     return url ? <img src={url} alt={alt ?? ""} loading="lazy" referrerPolicy="no-referrer" /> : <span>{alt}</span>;
   },
   table: ({ children }) => <div className="skill-markdown-table" tabIndex={0} role="region" aria-label="Table"><table>{children}</table></div>,
 };
 
-export function SkillMarkdown({ content, zh, onOpenExternal }: { content: string; zh: boolean; onOpenExternal: (url: string) => void }) {
+export function SkillMarkdown({ content, zh, onOpenExternal, allowRemoteImages = true }: { content: string; zh: boolean; onOpenExternal: (url: string) => void; allowRemoteImages?: boolean }) {
   const prefix = useId();
   const plugins = useMemo(() => [remarkGfm, [remarkSkillHeadings, { prefix }] satisfies [typeof remarkSkillHeadings, { prefix: string }]], [prefix]);
-  return <DocumentContext.Provider value={{ zh, onOpenExternal }}>
+  return <DocumentContext.Provider value={{ zh, onOpenExternal, allowRemoteImages }}>
     <article className="skill-markdown"><Markdown remarkPlugins={plugins} components={components} skipHtml>{skillMarkdownBody(content)}</Markdown></article>
   </DocumentContext.Provider>;
 }
@@ -104,7 +105,7 @@ export function SkillHtml({ html, zh, onOpenExternal, origin }: { html: string; 
     };
     return Array.from(fragment.childNodes).map((node, index) => render(node, String(index)));
   }, [html, prefix, zh, origin]);
-  return <DocumentContext.Provider value={{ zh, onOpenExternal }}><article className="skill-markdown">{rendered}</article></DocumentContext.Provider>;
+  return <DocumentContext.Provider value={{ zh, onOpenExternal, allowRemoteImages: true }}><article className="skill-markdown">{rendered}</article></DocumentContext.Provider>;
 }
 function WebsiteLink({ href, children, origin }: { href?: string; children: ReactNode; origin?: string }) {
   const { onOpenExternal } = useContext(DocumentContext);

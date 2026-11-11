@@ -3,6 +3,7 @@
 import * as React from "react"
 import { type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
+import { moveShadowFocus } from "@/components/ui/overlay-container"
 import { ToggleGroup as ToggleGroupPrimitive } from "radix-ui"
 
 import { toggleVariants } from "@/components/ui/toggle"
@@ -25,6 +26,8 @@ function ToggleGroup({
   size,
   spacing = 2,
   orientation = "horizontal",
+  loop = true,
+  onKeyDownCapture,
   children,
   ...props
 }: React.ComponentProps<typeof ToggleGroupPrimitive.Root> &
@@ -39,9 +42,12 @@ function ToggleGroup({
       data-size={size}
       data-spacing={spacing}
       data-orientation={orientation}
+      orientation={orientation}
+      loop={loop}
+      onKeyDownCapture={event => { onKeyDownCapture?.(event); moveShadowFocus(event, "[data-slot=toggle-group-item]", orientation, loop) }}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
-        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-vertical:flex-col data-vertical:items-stretch",
+        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-[var(--control-radius,var(--radius-lg))] data-[size=sm]:rounded-[var(--control-radius,min(var(--radius-md),10px))] data-vertical:flex-col data-vertical:items-stretch",
         className
       )}
       {...props}

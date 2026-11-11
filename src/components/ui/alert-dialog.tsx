@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
+import { cycleOverlayFocus, OverlayContainer } from "@/components/ui/overlay-container"
 
 function AlertDialog({
   ...props
@@ -21,8 +22,9 @@ function AlertDialogTrigger({
 function AlertDialogPortal({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Portal>) {
+  const container = React.useContext(OverlayContainer)
   return (
-    <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal" {...props} />
+    <AlertDialogPrimitive.Portal container={container} data-slot="alert-dialog-portal" {...props} />
   )
 }
 
@@ -45,6 +47,7 @@ function AlertDialogOverlay({
 function AlertDialogContent({
   className,
   size = "default",
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   size?: "default" | "sm" | "wide"
@@ -56,10 +59,11 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         data-size={size}
         className={cn(
-          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 flex min-w-0 max-h-[90dvh] w-full flex-col overflow-hidden -translate-x-1/2 -translate-y-1/2 gap-6 rounded-2xl bg-popover p-6 sm:p-8 text-popover-foreground shadow-[var(--app-shadow-dialog)] ring-1 ring-foreground/10 duration-150 outline-none max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-[520px] data-[size=sm]:sm:max-w-[520px] data-[size=wide]:sm:max-w-[600px] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 flex min-w-0 max-h-[90dvh] w-full flex-col overflow-hidden [translate:-50%_-50%] gap-6 rounded-[var(--dialog-radius,var(--radius-2xl))] bg-popover p-[var(--dialog-padding,1.5rem)] sm:p-[var(--dialog-padding,2rem)] text-popover-foreground shadow-[var(--app-shadow-dialog)] ring-1 ring-foreground/10 duration-150 outline-none max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-[520px] data-[size=sm]:sm:max-w-[520px] data-[size=wide]:sm:max-w-[600px] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
+        onKeyDown={event => { onKeyDown?.(event); cycleOverlayFocus(event) }}
       />
     </AlertDialogPortal>
   )

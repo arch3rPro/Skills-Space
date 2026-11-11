@@ -5,7 +5,8 @@ import { dirname, join, resolve, isAbsolute, delimiter, basename, relative, sep 
 import { fileURLToPath } from 'node:url';
 
 import { fingerprint, text, yamlDocument, readConfiguration, configurationState } from './dsh-configuration.mjs';
-import { projectPolicy } from './dsh-policy.mjs';
+import { projectPolicy, presetRepairPlan } from './dsh-policy.mjs';
+import { declaredSkillVersion } from './dsh-skill-version.mjs';
 import { isAlias } from './skills/node_modules/yaml/dist/index.js';
 export { fingerprint, text, yamlDocument };
 const absent = error => ['ENOENT','ENOTDIR'].includes(error.code);
@@ -28,14 +29,7 @@ export function metadata(raw) {
   if(!data||typeof data.name!=='string'||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(data.name))throw Error('Invalid DSH skill name');
   if(typeof data.description!=='string'||!data.description.length)throw Error('Missing description');
   for(const key of ['disableModelInvocation','modelInvocable','userInvocable'])if(key in data)throw Error('Invalid invocation key');
-  let version=null;
-  const metadataNode=document.get('metadata',true);
-  const metadataMap=isAlias(metadataNode)?metadataNode.resolve(document):metadataNode;
-  for(const [node,value] of [[metadataMap?.get?.('version',true),data.metadata?.version],[document.get('version',true),data.version]]){
-    const scalar=isAlias(node)?node.resolve(document):node;
-    const label=typeof value==='string'?value:typeof value==='number'&&Number.isFinite(value)?scalar?.source:null;
-    if(typeof label==='string'&&label.trim()){version=label.trim();break;}
-  }
+  const version=declaredSkillVersion(document,data,isAlias);
   const invocationEditable=!document.contents.items.some(pair=>['disable-model-invocation','user-invocable'].includes(pair.key?.value)&&pair.value?.anchor);
   return {name:data.name,description:data.description,version,invocationEditable,modelInvocable:data['disable-model-invocation']===undefined||!boolean(data,'disable-model-invocation'),userInvocable:boolean(data,'user-invocable')};
 }
@@ -75,7 +69,12 @@ export async function inspectDsh(home,dshHome,project=null,options={}) {
   home=resolve(home);dshHome=resolve(dshHome);
   const configuration=await readConfiguration(home,dshHome,options);
   if(options.contextKey==='all')return inspectAll(home,dshHome,project,options,configuration);
-  return inspectContext(home,dshHome,project,options,configuration);
+  const snapshot=await inspectContext(home,dshHome,project,options,configuration);
+  if(!project&&!snapshot.contextIssue){
+    const repair=presetRepairPlan(configuration.profileStates.get(snapshot.configurationPath));
+    if(repair)snapshot.repairablePresets=repair.presets;
+  }
+  return snapshot;
 }
 async function inspectContext(home,dshHome,project,options,configuration){
   const {warnings,dependencies,configurations,configurationFiles,presets,profiles,writableVersion}=configuration;

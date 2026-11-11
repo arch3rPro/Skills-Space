@@ -5,6 +5,28 @@ import { displayHomePath, type Agent, type Operation } from "@/lib/upstream";
 
 type Props = { operation: Operation; agents: Agent[]; home: string; zh: boolean; busy: boolean; onIncludeCopies: (agents: string[]) => void };
 
+export function RemovalReviewList({ items, excluded, home, zh }: {
+  items: { id: string; name: string; path: string }[];
+  excluded: { id: string; name: string; path: string; message: string }[];
+  home: string;
+  zh: boolean;
+}) {
+  return <div className="flex flex-col gap-3 text-sm">
+    {items.length > 0 && <section className="flex min-w-0 flex-col gap-2" aria-label={zh ? "待卸载技能" : "Skills to uninstall"}>
+      <div className="flex flex-wrap gap-2">{items.map(item => <Badge key={item.id} variant="secondary" className="h-auto max-w-full whitespace-normal break-all">{item.name}</Badge>)}</div>
+      <RemovalPaths paths={items.map(item => ({ path: item.path, state: zh ? "待卸载" : "To uninstall" }))} home={home} zh={zh}/>
+    </section>}
+    {excluded.length > 0 && <section className="flex min-w-0 flex-col gap-2">
+      <h3 className="font-medium">{zh ? "本次跳过" : "Excluded from this operation"}</h3>
+      <ul className="flex flex-col gap-2">{excluded.map(item => <li key={item.id}>
+        {item.name && <p className="break-all font-medium">{item.name}</p>}
+        <p className="text-xs text-muted-foreground">{item.message}</p>
+        {item.path && <p className="break-all font-mono text-xs text-muted-foreground">{displayHomePath(item.path, home)}</p>}
+      </li>)}</ul>
+    </section>}
+  </div>;
+}
+
 export function RemovalReview({ operation, agents, home, zh, busy, onIncludeCopies }: Props) {
   const t = (cn: string, en: string) => zh ? cn : en;
   const plans = operation.removals ?? [];

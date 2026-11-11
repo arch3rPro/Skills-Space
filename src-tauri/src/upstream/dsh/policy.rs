@@ -105,6 +105,41 @@ fn install_one(engine:&Engine,target:&Target,context_key:Option<&str>,revision:&
     if after["contextIssue"].is_string(){inspect_context(engine,target,Some(&format!("file:{path}")))}else{Ok(after)}
 }
 
+#[tauri::command]
+pub async fn upstream_dsh_repair_preset(
+    app: AppHandle,
+    target: Target,
+    context_key: String,
+    revision: String,
+) -> Result<serde_json::Value, String> {
+    if target.scope != "global" {
+        return Err("Repair Agent presets in global DSH settings.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = MUTATION.lock().map_err(|e| e.to_string())?;
+        let engine = Engine::from_app(&app)?;
+        repair_preset(&engine, &target, &context_key, &revision)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn repair_preset(engine: &Engine, target: &Target, key: &str, revision: &str) -> Result<serde_json::Value, String> {
+    let before = inspect_context(engine, target, Some(key))?;
+    if before["revision"] != revision || before["contextIssue"].is_string() {
+        return Err("DSH configuration changed. Refresh before repairing the preset.".into());
+    }
+    let path = before["configurationPath"].as_str().ok_or("DSH configuration unavailable")?;
+    let manifest = Path::new(path).with_file_name("package.json");
+    let _lock = WriterLock::acquire(&manifest)?;
+    let plan = prepare_policy(engine, target, "preset-repair", serde_json::json!({"contextKey":key,"revision":revision}))?;
+    if plan.path != path || Path::new(&plan.lock_path) != manifest {
+        return Err("DSH configuration write target changed.".into());
+    }
+    write_prepared(&plan)?;
+    inspect_context(engine, target, Some(key))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

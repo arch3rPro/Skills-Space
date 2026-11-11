@@ -2,6 +2,7 @@ import { copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } 
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { readUpstreamAgents } from "./read-upstream-agents.mjs";
 
 const require = createRequire(import.meta.url);
 const source = dirname(require.resolve("skills/package.json"));
@@ -36,6 +37,8 @@ cpSync(resolve("scripts/dsh-skill-policy"), `${destination}/dsh-skill-policy`, {
 copyFileSync(resolve("scripts/dsh-policy.mjs"), `${destination}/dsh-policy.mjs`);
 copyFileSync(resolve("scripts/run-dsh-policy-install.mjs"), `${destination}/run-dsh-policy-install.mjs`);
 copyFileSync(resolve("scripts/dsh-configuration.mjs"), `${destination}/dsh-configuration.mjs`);
+copyFileSync(resolve("scripts/dsh-skill-version.mjs"), `${destination}/dsh-skill-version.mjs`);
+copyFileSync(resolve("scripts/dsh-directory-config.mjs"), `${destination}/dsh-directory-config.mjs`);
 copyFileSync(resolve("scripts/prepare-dsh-change.mjs"), `${destination}/prepare-dsh-change.mjs`);
 copyFileSync(resolve("scripts/inspect-hermes-config.mjs"), `${destination}/inspect-hermes-config.mjs`);
 copyFileSync(resolve("scripts/prepare-hermes-settings.mjs"), `${destination}/prepare-hermes-settings.mjs`);
@@ -88,31 +91,7 @@ const { runInNewContext } = await import("node:vm");
 const useAgents = runInNewContext(`(${useConfig})`, {}, {timeout:1000});
 if (Object.keys(useAgents).sort().join(",") !== "claude-code,codex,sarvam-code" || Object.values(useAgents).some(a => typeof a.command !== "string" || a.args.length)) throw new Error("Review upstream interactive use contract.");
 writeFileSync(`${destination}/use-agents.json`, JSON.stringify(useAgents));
-const table = code.split("const agents = {\n")[1]?.split("\n};\nasync function detectInstalledAgents")[0];
-if (!table) throw new Error("Upstream Agent table changed; review the adapter.");
-// Detection observes configuration paths from the same pinned upstream table.
-function detection(id) {
-  const block = table.split(`name: "${id}"`)[1]?.split(/\n\t(?:"[^\n]+"|[\w-]+): \{/)[0] ?? "";
-  const paths = [...block.matchAll(/existsSync\(join\((\w+|process\.cwd\(\)), ((?:"[^"]+"[, ]*)+)\)\)/g)].map(([, base, parts]) => ({ base: base === "process.cwd()" ? "cwd" : base, path: [...parts.matchAll(/"([^"]+)"/g)].map((m) => m[1]).join("/") }));
-  for (const [, base] of block.matchAll(/existsSync\((\w+)\)/g)) paths.push({ base, path: "" });
-  for (const [, path] of block.matchAll(/existsSync\("([^"]+)"\)/g)) paths.push({ base: "absolute", path });
-  if (block.includes("isMiniMaxCodeInstalled()")) paths.push({base:"home",path:".minimax"},{base:"absolute",path:"/Applications/MiniMax Code.app"});
-  if (block.includes("isPositAssistantInstalled()")) paths.push({base:"home",path:".posit/assistant"},{base:"home",path:".positai"});
-  if (block.includes("isKimchiInstalled()")) paths.push({ base: "home", path: ".config/kimchi" });
-  if (block.includes("isZCodeInstalled()")) paths.push({ base: "home", path: ".zcode" }, { base: "absolute", path: "/Applications/ZCode.app" });
-  return { detectionPaths: paths, universalVisible: !block.includes("showInUniversalList: false"), detectionDependency: block.includes('packageJsonHasDependency(join(cwd, "package.json"), "eve")') ? "eve" : null };
-}
-const agents = [...table.matchAll(/name: "([^"]+)",\n\s*displayName: "([^"]+)",\n\s*skillsDir: "([^"]+)",\n\s*globalSkillsDir: ([^\n]+)/g)].map(([, id, name, projectPath, expression]) => {
-  const globalExpression = expression.replace(/,$/, "");
-  if (globalExpression === "void 0") return { id, name, projectPath, ...detection(id), globalBase: null, globalPath: "" };
-  if (globalExpression === "getOpenClawGlobalSkillsDir()") return { id, name, projectPath, ...detection(id), globalBase: "openclaw", globalPath: "skills" };
-  const join = /^join\((\w+), (.+)\)$/.exec(globalExpression);
-  if (!join) throw new Error(`Unsupported upstream path: ${globalExpression}`);
-  const segments = [...join[2].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-  if (!segments.length || segments.some((part) => part.includes(".."))) throw new Error("Invalid upstream path.");
-  return { id, name, projectPath, ...detection(id), globalBase: join[1], globalPath: segments.join("/") };
-});
-if (agents.length !== 79) throw new Error(`Review upstream Agent coverage: ${agents.length}`);
+const agents = readUpstreamAgents(code);
 writeFileSync(`${destination}/agents.json`, JSON.stringify(agents, null, 2));
 const parserCheck = spawnSync(binary, [`${destination}/inspect-upstream-source.mjs`, "owner/repo#main@selected-skill"], { encoding: "utf8", env: { ...process.env, GH_HOST: "github.com" } });
 if (parserCheck.status !== 0) throw new Error("Review pinned read-only source parser.");

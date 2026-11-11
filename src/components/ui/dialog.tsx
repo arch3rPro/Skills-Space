@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
+import { cycleOverlayFocus, OverlayContainer } from "@/components/ui/overlay-container"
 import { XIcon } from "lucide-react"
 
 function Dialog({
@@ -22,7 +23,8 @@ function DialogTrigger({
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  const container = React.useContext(OverlayContainer)
+  return <DialogPrimitive.Portal container={container} data-slot="dialog-portal" {...props} />
 }
 
 function DialogClose({
@@ -51,6 +53,7 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -61,10 +64,11 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl bg-popover p-4 text-sm text-popover-foreground shadow-[var(--app-shadow-dialog)] ring-1 ring-foreground/10 duration-150 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] [translate:-50%_-50%] gap-4 rounded-[var(--dialog-radius,var(--radius-2xl))] bg-popover p-4 text-sm text-popover-foreground shadow-[var(--app-shadow-dialog)] ring-1 ring-foreground/10 duration-150 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
+        onKeyDown={event => { onKeyDown?.(event); cycleOverlayFocus(event) }}
       >
         {children}
         {showCloseButton && (

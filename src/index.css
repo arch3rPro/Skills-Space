@@ -183,11 +183,11 @@ html, body, #root { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .skill-detail-metadata [data-slot="directory-link"] > svg { color: var(--muted-foreground); }
 .skill-detail-metadata > div { min-width: 0; }
 @media (max-width: 1150px) { .app-page { padding-inline: 2rem; } }
-@media (max-width: 760px) { .app-page { padding-inline: 1.5rem; } .skill-detail-metadata { grid-template-columns: minmax(0,1fr); } }
+@media (max-width: 760px) { .app-page { padding-inline: 1.5rem; } }
 
 /* Page tabs and option controls have distinct visual roles. */
 .page-tabs { max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; flex-shrink: 0; }
-.segmented-control { padding: .25rem; background: var(--muted); gap: .125rem; max-width: 100%; }
+.segmented-control { padding: var(--segmented-padding,.25rem); background: var(--muted); gap: .125rem; max-width: 100%; }
 .step-indicator li:not(:last-child)::before { content: ""; position: absolute; height: 1px; background: var(--border); top: .75rem; left: calc(50% + 1rem); right: calc(-50% + 1rem); }
 .modal-body { overflow-wrap: anywhere; }
 .agent-picker { scrollbar-gutter: stable; }

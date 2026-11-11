@@ -5,15 +5,16 @@ import { RemovalPaths } from "@/components/removal-paths";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-export function OperationResults({ result, operation, home, zh, busy, onReinstall }: { result: OperationResult; operation: Operation | null; home: string; zh: boolean; busy: boolean; onReinstall: (skill: string) => void }) {
+export function OperationResults({ result, operation, action = operation?.action, home, zh, busy, onReinstall, inventoryExpected = true, distinguishPaths = false }: { result: OperationResult; operation: Operation | null; action?: Operation["action"]; home: string; zh: boolean; busy: boolean; onReinstall?: (skill: string) => void; inventoryExpected?: boolean; distinguishPaths?: boolean }) {
   const t = (cn: string, en: string) => zh ? cn : en;
-  const complete = [...new Map(result.items.filter(item => item.status === "complete").map(item => [item.skill, item])).values()];
+  const completeKey = (item: OperationResult["items"][number]) => distinguishPaths ? JSON.stringify([item.skill, item.destination]) : item.skill;
+  const complete = [...new Map(result.items.filter(item => item.status === "complete").map(item => [completeKey(item), item])).values()];
   const failures = result.items.filter(item => item.status !== "complete");
   const itemKey = (item: OperationResult["items"][number]) => JSON.stringify([item.skill,item.destination ?? null,item.agents ?? [],item.message]);
   const incomplete = [...new Map(failures.map(item => [itemKey(item), item])).values()];
   const isAssociated = (item: OperationResult["items"][number]) => operation?.action === "update" && (!!item.destination || complete.some(done=>done.skill===item.skill));
   const associatedOnly = incomplete.length>0 && incomplete.every(isAssociated);
-  const verb = operation?.action === "remove" ? t("已卸载", "Uninstalled") : operation?.action === "update" ? t("已更新", "Updated") : t("已安装", "Installed");
+  const verb = action === "remove" ? t("已卸载", "Uninstalled") : action === "update" ? t("已更新", "Updated") : t("已安装", "Installed");
   const hint = (item: OperationResult["items"][number]) => {
     const pending = item.removal?.paths.filter(path => path.selected && path.outcome !== "removed");
     if (pending?.some(path => path.outcome === "unknown")) return t("无法读取部分卸载路径，请检查访问权限", "Some uninstall paths could not be read. Check access permissions.");
@@ -35,9 +36,9 @@ export function OperationResults({ result, operation, home, zh, busy, onReinstal
   ]);
   return <div className="flex flex-col gap-5 text-sm">
     <p className="font-medium" role="status">{t(`${verb} ${complete.length} 个技能`, `${verb} ${complete.length} skills`)}{incomplete.length > 0 && <span className="ml-3 text-muted-foreground">{associatedOnly ? t(`${incomplete.length} 个关联副本未完成`, `${incomplete.length} associated copies incomplete`) : t(`${incomplete.length} 个未完成`, `${incomplete.length} incomplete`)}</span>}</p>
-    {incomplete.length > 0 && <ul className="flex flex-col gap-3">{incomplete.map(item => <li key={itemKey(item)} className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="break-all font-medium">{item.skill}{!!item.agents?.length && ` · ${item.agents.map(id=>result.inventory?.agents?.find(agent=>agent.id===id)?.name ?? id).join("、")}`}{isAssociated(item) && t(" · 关联副本", " · associated copy")}</p><p className="mt-1 text-xs text-muted-foreground">{hint(item)}</p>{item.destination && <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{displayHomePath(item.destination,home)}</p>}</div>{operation?.action === "update" && !item.destination && !result.inventory?.skills.some(skill => skill.name === item.skill && skill.sourceType === "local-sync") && result.inventory?.skills.some(skill => skill.name === item.skill && skill.installSource) && <Button variant="outline" size="sm" disabled={busy} onClick={() => onReinstall(item.skill)}>{t("重新安装", "Reinstall")}</Button>}</li>)}</ul>}
-    {complete.length > 0 && <div className="flex flex-wrap gap-2">{complete.map(item => <Badge key={item.skill} variant="secondary" className="h-auto min-h-5 max-w-full whitespace-normal break-all">{item.skill}</Badge>)}</div>}
-    {!result.inventory && <p className="text-xs text-muted-foreground">{t("技能列表读取失败，请关闭弹窗后刷新。", "Could not read skills. Close this dialog and refresh.")}</p>}
+    {incomplete.length > 0 && <ul className="flex flex-col gap-3">{incomplete.map(item => <li key={itemKey(item)} className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="break-all font-medium">{item.skill}{!!item.agents?.length && ` · ${item.agents.map(id=>result.inventory?.agents?.find(agent=>agent.id===id)?.name ?? id).join("、")}`}{isAssociated(item) && t(" · 关联副本", " · associated copy")}</p><p className="mt-1 text-xs text-muted-foreground">{hint(item)}</p>{item.destination && <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{displayHomePath(item.destination,home)}</p>}</div>{onReinstall && operation?.action === "update" && !item.destination && !result.inventory?.skills.some(skill => skill.name === item.skill && skill.sourceType === "local-sync") && result.inventory?.skills.some(skill => skill.name === item.skill && skill.installSource) && <Button variant="outline" size="sm" disabled={busy} onClick={() => onReinstall(item.skill)}>{t("重新安装", "Reinstall")}</Button>}</li>)}</ul>}
+    {complete.length > 0 && <div className="flex flex-wrap gap-2">{complete.map(item => <Badge key={completeKey(item)} variant="secondary" className="h-auto min-h-5 max-w-full whitespace-normal break-all">{item.skill}</Badge>)}</div>}
+    {inventoryExpected && !result.inventory && <p className="text-xs text-muted-foreground">{t("技能列表读取失败，请关闭弹窗后刷新。", "Could not read skills. Close this dialog and refresh.")}</p>}
     <RemovalPaths paths={paths} home={home} zh={zh} />
     {(result.logs || incomplete.length > 0) && <ExecutionLog value={[...failures.map(item => `${item.skill}: ${item.message}`), result.logs].join("\n")} home={home} zh={zh} />}
   </div>;

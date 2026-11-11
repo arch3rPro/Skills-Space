@@ -4,6 +4,7 @@ import * as React from "react"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { OverlayContainer } from "@/components/ui/overlay-container"
 
 function TooltipProvider({
   delayDuration = 350,
@@ -41,7 +42,7 @@ function TooltipContent({
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> & { tone?: "default" | "surface" }) {
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={React.useContext(OverlayContainer)}>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         side={side}

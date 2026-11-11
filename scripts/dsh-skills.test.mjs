@@ -66,6 +66,49 @@ test("DSH desktop ASAR reader resolves real API with isolated profiles and names
   assert.ok(value.warnings.some(warning=>warning.startsWith(`DSH ${join(dir,"package.json")}: bundle @fixture/incompatible is incompatible with runtime `)));
   assert.ok(!result.stdout.includes("must-not-disclose"));
 },false));
+test('DSH preset repair changes only the active obsolete built-in entry',{skip:!desktopElectron||!existsSync(desktopElectron)},async()=>fixture(async home=>{
+  const dshHome=join(home,'.dsh');
+  const manifest={name:'desktop-preset-check',private:true,dsh:{profile:{bundles:['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app']}}};
+  const profileDir=await profile(home,'desktop','- insert: []\n',manifest);
+  const webDir=await profile(home,'web','- insert: [] # Keep the other profile\n');
+  const patchPath=join(profileDir,'cordis.patch.yml'),homePatch=join(dshHome,'cordis.patch.yml');
+  const contextKey='file:'+patchPath;
+  const environment={HOME:home,USERPROFILE:home,DSH_HOME:dshHome,PATH:'/usr/bin:/bin',ELECTRON_RUN_AS_NODE:'1'};
+  const run=(...args)=>spawnSync(desktopElectron,['--expose-internals',...args],{encoding:'utf8',env:environment});
+  const readResult=result=>{assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);};
+  const inspectProfile=()=>readResult(run(script,home,dshHome,'','inspect',JSON.stringify({contextKey})));
+  const prepare=revision=>run(resolve('src-tauri/resources/upstream/prepare-dsh-change.mjs'),'preset-repair',home,dshHome,'',JSON.stringify({contextKey,revision}));
+  const moduleUrl=pathToFileURL(resolve('src-tauri/resources/upstream/dsh-configuration.mjs')).href;
+  const source=`import {readConfiguration,entries} from ${JSON.stringify(moduleUrl)};const config=await readConfiguration(${JSON.stringify(home)},${JSON.stringify(dshHome)});const state=config.profileStates.get(${JSON.stringify(patchPath)});console.log(JSON.stringify(entries(state.effective).filter(({row})=>row.name==='@deepseek-ai/dsh-agent-preset').map(({row})=>row)));`;
+  const declarations=readResult(run('--input-type=module','--eval',source));
+  assert.deepEqual(declarations.map(row=>row.config.id).sort(),['cordis','minimal','ptc','standard']);
+  const stale={id:'tool-subagent-list-agents',name:'@deepseek-ai/dsh-tool-subagent-control/list-agents'};
+  const overrides=declarations.filter(row=>['standard','ptc'].includes(row.config.id)).map(({id,name,config})=>({
+    id,name,config:{...config,description:'Keep preset description',plugins:[...config.plugins,stale]},
+  }));
+  const masked=declarations.find(row=>row.config.id==='ptc');
+  const homeBytes=JSON.stringify([{id:masked.id,name:masked.name,config:masked.config}]);
+  const webPatch=join(webDir,'cordis.patch.yml'),webBytes=await readFile(webPatch,'utf8');
+  const bytes='# Keep the profile comment\n'+JSON.stringify(overrides,null,2)+'\n';
+  await writeFile(homePatch,homeBytes);
+  await writeFile(patchPath,bytes);
+  const broken=inspectProfile();
+  assert.deepEqual(broken.repairablePresets,['standard']);
+  const staleAttempt=prepare('stale-revision');
+  assert.equal(staleAttempt.status,1);assert.match(staleAttempt.stderr,/configuration changed/i);
+  const plan=readResult(prepare(broken.revision));
+  assert.equal(plan.path,patchPath);assert.equal(plan.before,bytes);
+  assert.equal(await readFile(patchPath,'utf8'),bytes,'Preparing a repair does not write the profile');
+  const [{yamlDocument}]=await modules();
+  const expected=structuredClone(overrides);
+  expected.find(row=>row.config.id==='standard').config.plugins.pop();
+  assert.deepEqual(yamlDocument(plan.after).toJS(),expected);
+  assert.match(plan.after,/# Keep the profile comment/);
+  await writeFile(patchPath,plan.after);
+  assert.equal(inspectProfile().repairablePresets,undefined);
+  assert.equal(await readFile(homePatch,'utf8'),homeBytes);
+  assert.equal(await readFile(webPatch,'utf8'),webBytes);
+},false));
 function inspect(home, project = "", documents) {
   const env = {...process.env, HOME:home, USERPROFILE:home}; delete env.DSH_AGENTS_HOME;
   const result = spawnSync(process.execPath,[script,home,join(home,".dsh"),project,...(documents ? ["validate",JSON.stringify(documents)] : [])],{encoding:"utf8",env});
@@ -401,6 +444,22 @@ configurationTest('DSH preset declarations without a real config id never inheri
   assert.equal(snapshot.configurations.find(row=>row.key===snapshot.contextKey).preset,'null');
   assert.deepEqual(await readFile(file),before);
 }));
+test('DSH standalone policy setup disables the old provider and inserts a valid replacement',{skip:!desktopElectron||!existsSync(desktopElectron)?'Select the original DSH Desktop runtime':false},async()=>fixture(async home=>{
+  const path=await profile(home,'desktop',"- insert:\n  - id: fixture-fs\n    name: '@deepseek-ai/dsh-skill-filesystem'\n    config: { watch: true }\n");
+  const file=join(path,'cordis.patch.yml'),before=await readFile(file,'utf8');
+  const inspectUrl=pathToFileURL(resolve('src-tauri/resources/upstream/inspect-dsh-skills.mjs')).href;
+  const policyUrl=pathToFileURL(resolve('src-tauri/resources/upstream/dsh-policy.mjs')).href;
+  const configUrl=pathToFileURL(resolve('src-tauri/resources/upstream/dsh-configuration.mjs')).href;
+  const source=`import {inspectDsh} from ${JSON.stringify(inspectUrl)};import {prepareSetup} from ${JSON.stringify(policyUrl)};import {yamlDocument} from ${JSON.stringify(configUrl)};const home=${JSON.stringify(home)},file=${JSON.stringify(file)};const snapshot=await inspectDsh(home,home+'/.dsh',null,{installation:'desktop',contextKey:'file:'+file});const plan=await prepareSetup(snapshot);console.log(JSON.stringify(yamlDocument(plan.after).toJS({maxAliasCount:50})));`;
+  const result=spawnSync(desktopElectron,['--input-type=module','--eval',source],{encoding:'utf8',env:{...process.env,HOME:home,USERPROFILE:home,DSH_HOME:join(home,'.dsh'),ELECTRON_RUN_AS_NODE:'1'}});
+  assert.equal(result.status,0,result.stderr);
+  const rows=JSON.parse(result.stdout),original=rows.find(row=>row.id==='fixture-fs'),replacement=rows.flatMap(row=>row.insert??[]).find(row=>row.id==='fixture-fs-skills-space-policy');
+  assert.equal(original.disabled,true);
+  assert.equal(replacement.name,'@skills-space/dsh-skill-policy');
+  assert.equal(replacement.config.filesystem.watch,true);
+  assert.equal(replacement.group,undefined);
+  assert.equal(await readFile(file,'utf8'),before);
+},false));
 test('DSH Desktop bundled CLI discovers web custom and no-provider Profiles without a standalone npm runtime',{skip:!desktopElectron||!existsSync(desktopElectron)?'Set SKILLS_SPACE_DSH_TEST_DESKTOP to an original Desktop Electron executable':false},async()=>fixture(async home=>{
   for(const name of ['desktop','web','custom'])await profile(home,name,"- insert:\n  - id: preset-standard\n    name: '@deepseek-ai/dsh-agent-preset'\n    config:\n      id: standard\n      plugins:\n        - id: skill-filesystem\n          name: '@deepseek-ai/dsh-skill-filesystem'\n          config: {watch: false}\n");
   await profile(home,'without-provider','- insert: []\n');

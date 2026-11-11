@@ -35,3 +35,30 @@ export async function readPolicy(path){
 export function preference(rules,file,name){return rules.find(rule=>rule.file===file&&rule.name===name)??null;}
 export function effectivePolicy(source,rule){return {modelInvocable:!rule?.disabled&&source.modelInvocable&&(rule?.modelInvocable??true),userInvocable:!rule?.disabled&&source.userInvocable&&(rule?.userInvocable??true)};}
 export function statusPath(policyFile,configuration,provider){return join(dirname(policyFile),'active',digest(JSON.stringify([configuration,provider]))+'.json');}
+
+// Shared rule transitions for the desktop adapter and companion Host.
+export function changePolicyRule(skill, previous, action) {
+  const next = { file: skill.file, name: skill.name, disabled: previous?.disabled ?? false,
+    modelInvocable: previous?.modelInvocable ?? true, userInvocable: previous?.userInvocable ?? true };
+  const available = () => (skill.sourceModelInvocable && next.modelInvocable) || (skill.sourceUserInvocable && next.userInvocable);
+  if (action === 'enable') {
+    next.disabled = false;
+    if (!available()) { next.modelInvocable = true; next.userInvocable = true; }
+  } else if (action === 'disable') next.disabled = true;
+  else if (['model-on', 'model-off', 'manual-on', 'manual-off'].includes(action)) {
+    const model = action.startsWith('model');
+    if (action.endsWith('on') && !(model ? skill.sourceModelInvocable : skill.sourceUserInvocable)) throw Error('The skill document forbids this invocation channel.');
+    next[model ? 'modelInvocable' : 'userInvocable'] = action.endsWith('on');
+    if (!available()) {
+      next.disabled = true;
+      next.modelInvocable = previous?.modelInvocable ?? true;
+      next.userInvocable = previous?.userInvocable ?? true;
+    }
+  } else if (['both', 'manual', 'model', 'none'].includes(action)) {
+    if ((action === 'both' && (!skill.sourceModelInvocable || !skill.sourceUserInvocable)) || (action === 'model' && !skill.sourceModelInvocable) || (action === 'manual' && !skill.sourceUserInvocable)) throw Error('The skill document forbids the requested invocation channel.');
+    next.disabled = action === 'none';
+    if (action !== 'none') { next.modelInvocable = action !== 'manual'; next.userInvocable = action !== 'model'; }
+  } else throw Error('Unknown DSH policy action');
+  if (action === 'enable' && !skill.sourceModelInvocable && !skill.sourceUserInvocable) throw Error('The skill document forbids both invocation channels.');
+  return next;
+}

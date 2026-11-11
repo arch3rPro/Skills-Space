@@ -31,3 +31,12 @@ export function InventoryCard({ onOpen, onClick, className, ...props }: Componen
     onOpen();
   }} />;
 }
+
+// List selection belongs to the complete row, including its independent actions.
+export function InventoryListRow({ selected, className, ...props }: ComponentProps<"div"> & { selected: boolean }) {
+  return <div {...props} data-state={selected ? "selected" : undefined} className={cn("group/inventory-row flex min-w-0 items-center gap-2 rounded-[var(--button-radius,9999px)] px-1 transition-colors hover:bg-muted data-[state=selected]:bg-secondary data-[state=selected]:text-secondary-foreground", className)} />;
+}
+
+export function InventoryListActions({ className, ...props }: ComponentProps<"div">) {
+  return <div {...props} className={cn("hidden shrink-0 items-center gap-1 group-hover/inventory-row:flex group-focus-within/inventory-row:flex [@media(hover:none)]:flex", className)} />;
+}

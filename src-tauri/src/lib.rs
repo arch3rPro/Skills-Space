@@ -71,6 +71,7 @@ pub fn run() {
             upstream::dsh::upstream_dsh_save,
             upstream::dsh::upstream_dsh_policy,
             upstream::dsh::upstream_dsh_policy_install,
+            upstream::dsh::upstream_dsh_repair_preset,
             upstream::dsh::upstream_dsh_removal_plan,
             upstream::dsh::upstream_dsh_trash,
             upstream::dsh::upstream_dsh_creation_plan,

@@ -42,8 +42,12 @@ export function expandHomePath(value: string, home: string): string {
 
 export function visibleSkills(inventory: Inventory | null, query: string, agent: string): InstalledSkill[] {
   if (agent && !inventory?.agents.some((target) => target.id === agent && target.installationStatus === "confirmed")) return [];
+  return (inventory?.skills ?? []).filter(skill => (!agent || skill.agents.includes(agent)) && matchesSkillQuery(skill, query, agent));
+}
+
+export function matchesSkillQuery(skill: InstalledSkill, query: string, agent = ""): boolean {
   const normalized = query.trim().toLowerCase();
-  return (inventory?.skills ?? []).filter((skill) => (!agent || skill.agents.includes(agent)) && (!normalized || `${skill.name} ${skill.description} ${skill.source ?? ""} ${skill.piState?.packageSource ?? ""} ${!agent || agent === "codex" ? `${skill.codexState?.displayName ?? ""} ${skill.codexState?.pluginDisplayName ?? ""}` : ""}`.toLowerCase().includes(normalized)));
+  return (!normalized || `${skill.name} ${skill.description} ${skill.source ?? ""} ${skill.sourceUrl ?? ""} ${skill.installSource ?? ""} ${skill.piState?.packageSource ?? ""} ${!agent || agent === "codex" ? `${skill.codexState?.displayName ?? ""} ${skill.codexState?.pluginDisplayName ?? ""}` : ""}`.toLowerCase().includes(normalized));
 }
 
 export type SkillCollection = "managed" | "agent";

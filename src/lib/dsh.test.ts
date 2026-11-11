@@ -204,19 +204,16 @@ test('DSH policy confirmation follows inherited-file scope rather than ownership
   assert.equal(dshPolicyNeedsConfirmation([],project),false);
 });
 
-test('DSH policy feedback keeps ordinary saves transient and retains actionable notices',async()=>{
-  const {dshPolicyNoticeRequired,dshPolicySaveFeedback}=await import('./dsh.ts');
+test('DSH policy save feedback reflects when changes apply',async()=>{
+  const {dshPolicySaveFeedback}=await import('./dsh.ts');
   const base:NonNullable<DshSnapshot['policy']>={status:'active',issue:null,configuration:null,policyFile:'/policy.json',revision:'v2',canInstall:false,canSave:true,providerCount:1};
-  assert.equal(dshPolicyNoticeRequired(undefined),false);assert.equal(dshPolicyNoticeRequired(base),false);
+  assert.equal(dshPolicySaveFeedback(base,true),'已保存');
   const applying={...base,status:'pending' as const,pendingReason:'apply' as const,running:true};
   const dormant={...base,status:'pending' as const,pendingReason:'reload' as const,running:false};
   const reload={...dormant,running:true};
-  assert.equal(dshPolicyNoticeRequired(applying),false);assert.equal(dshPolicySaveFeedback(applying,true),'已保存');
-  assert.equal(dshPolicyNoticeRequired(dormant),false);assert.match(dshPolicySaveFeedback(dormant,true),/已保存.*下次/);
-  assert.equal(dshPolicyNoticeRequired(reload),true);assert.match(dshPolicySaveFeedback(reload,true),/已保存.*重启/);
-  for(const status of ['not-installed','needs-setup','error'] as const)assert.equal(dshPolicyNoticeRequired({...base,status}),true);
-  assert.equal(dshPolicyNoticeRequired({...base,status:'unavailable',providerCount:0}),false);
-  assert.equal(dshPolicyNoticeRequired({...base,status:'unavailable',providerCount:2}),true);
+  assert.equal(dshPolicySaveFeedback(applying,true),'已保存');
+  assert.match(dshPolicySaveFeedback(dormant,true),/已保存.*下次/);
+  assert.match(dshPolicySaveFeedback(reload,true),/已保存.*重启/);
 });
 test('DSH readback merges by physical file, preserving selection order and unrelated skill identity',()=>{
   const other={...skill,path:'/other/alpha',dshState:{...state,file:'/other/alpha/SKILL.md'}};const inventory:Inventory={version:'1',agents:[],skills:[other,skill],warnings:[]};

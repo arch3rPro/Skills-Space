@@ -4,8 +4,9 @@ import { resolve, isAbsolute } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { configurationState, writableFields, directoryFields, validateSettings, configLocations, restoreExpressions, entries, sameEntry, valueAt, expression, providerConfig, setProviderConfig } from './dsh-configuration.mjs';
 import { fileURLToPath } from 'node:url';
-import { preparePolicy, prepareSetup } from './dsh-policy.mjs';
+import { preparePolicy, prepareSetup, preparePresetRepair } from './dsh-policy.mjs';
 import { inspectDsh, metadata, fingerprint, yamlDocument, text } from './inspect-dsh-skills.mjs';
+import { restoreAdditionalDirectoryRules } from './dsh-directory-config.mjs';
 export function prepareInvocation(before,modelInvocable,userInvocable) {
   if(typeof modelInvocable!=='boolean'||typeof userInvocable!=='boolean')throw Error('Invalid invocation policy');
   if(Buffer.byteLength(before)>256*1024)throw Error('DSH skill exceeds editing limits');
@@ -43,6 +44,12 @@ export async function prepareConfiguration(home,dshHome,project,request,options=
   }else if(!reset&&!restorePreset){
     for(const key of fields)if(Object.hasOwn(request,key)&&!row.unresolvedFields.includes(key)&&!row.readOnlyFields.includes(key)){
       const value=request[key];if(value===null&&['dshHome','agentsHome'].includes(key))delete next[key];else next[key]=value;
+    }
+    const additional=request.customSkillDirs;
+    if(directoryOnly&&row.additionalDirectoryLayout&&!row.readOnlyFields.includes('customSkillDirs')&&
+      Array.isArray(additional)&&additional.includes(null)){
+      if(!additional.every(entry=>entry===null||typeof entry==='string'))throw Error('Invalid DSH skill directory');
+      next.customSkillDirs=restoreAdditionalDirectoryRules(state.config.customSkillDirs,additional);
     }
     if(!validateSettings(Object.fromEntries(Object.entries(next).filter(([key,value])=>(!directoryOnly||directoryFields.includes(key))&&!expression(value)))))throw Error('Invalid DSH skill settings');
     for(const key of ['customSkillDirs','dshHome','agentsHome'])for(const value of Array.isArray(next[key])?next[key]:typeof next[key]==='string'?[next[key]]:[]){if(typeof value==='string'&&!isAbsolute(value)&&value!=='~'&&!value.startsWith('~/'))throw Error('Use an absolute skill directory');}
@@ -92,7 +99,12 @@ export async function prepareConfiguration(home,dshHome,project,request,options=
 if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
   try{
     const [mode,home,dshHome,project,payload,options]=process.argv.slice(2),request=JSON.parse(payload);
-    const result=mode==='policy'||mode==='policy-setup'?(mode==='policy'?await preparePolicy(await inspectDsh(home,dshHome,project||null,{...(options?JSON.parse(options):{}),contextKey:request.contextKey}),request):await prepareSetup(await inspectDsh(home,dshHome,project||null,{...(options?JSON.parse(options):{}),contextKey:request.contextKey}))):mode==='configuration'?await prepareConfiguration(home,dshHome,project||null,request,options?JSON.parse(options):{}):mode==='invocation'?prepareInvocation(readFileSync(request.file,'utf8'),request.modelInvocable,request.userInvocable):null;
+    let result;
+    if(mode==='preset-repair'){
+      const snapshot=await inspectDsh(home,dshHome,project||null,{...(options?JSON.parse(options):{}),contextKey:request.contextKey});
+      if(snapshot.revision!==request.revision||snapshot.contextIssue)throw Error('DSH configuration changed. Refresh first.');
+      result=await preparePresetRepair(snapshot);
+    }else result=mode==='policy'||mode==='policy-setup'?(mode==='policy'?await preparePolicy(await inspectDsh(home,dshHome,project||null,{...(options?JSON.parse(options):{}),contextKey:request.contextKey}),request):await prepareSetup(await inspectDsh(home,dshHome,project||null,{...(options?JSON.parse(options):{}),contextKey:request.contextKey}))):mode==='configuration'?await prepareConfiguration(home,dshHome,project||null,request,options?JSON.parse(options):{}):mode==='invocation'?prepareInvocation(readFileSync(request.file,'utf8'),request.modelInvocable,request.userInvocable):null;
     if(!result)throw Error('Unsupported DSH change');console.log(JSON.stringify(result));
   }catch(error){console.error(error.message);process.exitCode=1;}
 }

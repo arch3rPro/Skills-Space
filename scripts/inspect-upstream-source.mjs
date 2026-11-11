@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { runInNewContext } from "node:vm";
-const code = await readFile(new URL("./skills/dist/cli.mjs", import.meta.url), "utf8");
+const code = await readFile(process.argv[3] || new URL("./skills/dist/cli.mjs", import.meta.url), "utf8");
 const start = code.indexOf('const DEFAULT_GITHUB_HOST = "github.com";');
 const end = code.indexOf("const CSI_RE =", start);
 if (start < 0 || end < start) throw new Error("Review pinned source parser boundaries.");

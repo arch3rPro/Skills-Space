@@ -3,6 +3,7 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
+import { moveShadowFocus } from "@/components/ui/overlay-container"
 import { Tabs as TabsPrimitive } from "radix-ui"
 
 function Tabs({
@@ -14,6 +15,7 @@ function Tabs({
     <TabsPrimitive.Root
       data-slot="tabs"
       data-orientation={orientation}
+      orientation={orientation}
       className={cn(
         "group/tabs flex gap-2 data-[orientation=horizontal]:flex-col",
         className
@@ -42,6 +44,8 @@ const tabsListVariants = cva(
 function TabsList({
   className,
   variant = "default",
+  loop = true,
+  onKeyDownCapture,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.List> &
   VariantProps<typeof tabsListVariants>) {
@@ -49,6 +53,8 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       data-variant={variant}
+      loop={loop}
+      onKeyDownCapture={event => { onKeyDownCapture?.(event); moveShadowFocus(event, "[role=tab]", event.currentTarget.getAttribute("aria-orientation") === "vertical" ? "vertical" : "horizontal", loop) }}
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
     />
