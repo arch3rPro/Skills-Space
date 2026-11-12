@@ -34,7 +34,7 @@
 | [0005 项目优化](specs/0005-project-optimization-plan.md) | 结构清理、加载／筛选修正及当前资料清理已实施；其余结构优化为候选 | 2026-10-13 移除退役实现、提取图标／弹窗／基础原生测试，补充现有验证入口；其余模块优化仍为计划 |
 | [0013 创意工坊](specs/0013-skill-workshop.md) | 2026-11-05 创建／修改、内置技能、评估及优化已接入 | 四种原版Agent工作台、固定技能资源／检查更新、独立只读报告及对话优化已定向验证／QA打包；Codex 与 Pi 已实测方案和构建，Claude Code 与 Sarvam Code 待实机验证，独立试用／删除保护待完成 |
 | [0009 DSH 原生技能管理补齐](specs/0009-dsh-native-skill-management.md) | 原生管理、通用配置 A—C 及桌面运行包读取已实施并提交 | 上下文检查、声明组合、Profile 覆盖／恢复、四种调用策略及独立文件废纸篓卸载；父 preset／动态只读 |
-| [0012 DSH 设置与原生管理重做方案](specs/0012-dsh-settings-native-skills-rebuild.md) | DSH 配置、完整发现库存、托管/原生独立策略已随 `ec1feb3` 提交；版本反馈 `008a896`、共享筛选 `79b32ef`；各轮定向验证及待用户手测边界保留 |
+| [0012 DSH 设置与原生管理重做方案](specs/0012-dsh-settings-native-skills-rebuild.md) | 基础能力与伴随插件增量已实现 | 当前整页检查与批量更新待运行界面验收；项目 Git 根与文件恢复见第 38.19 节 |
 | [0007 DeepSeek Harness 技能管理](specs/0007-deepseek-harness-skill-management.md) | 首批完成；完整原生回归通过 | DSH 只读检查、原版通用 CLI 生命周期及增强适配／通用支持分类 |
 | [0006 Pi 原生技能配置](specs/0006-pi-skill-management.md) | 技能与扩展包管理已实施并提交；受影响页面已完成定点原生 App 验收 | 设置内 Pi 设置、原生目录／规则与卡片启停；Pi 扩展包安装／卸载、资源加载和 1.4.0 适配见最新增量，包更新委托原版 Pi，通用技能生命周期保持原版 CLI |
 | [0008 Hermes 技能增强适配](specs/0008-hermes-skill-management.md) | 技能管理已实施并提交；验证范围见 0008 | 全局／项目／原生检测、Hermes 设置、项目信任、启停与预加载；后续范围单列 |
@@ -79,7 +79,7 @@
 | [Pi Codemode 与内置扩展设置设计](research/pi-codemode-builtins-design-2026-10-29.md) | 2026-10-29 官方文档与 Pi 1.4.0 核对；撤去内置扩展管理，代码模式为技能加载下方同级卡片；不管理 MCP，不含沙箱；已按确认方案实施，启动模式为带图标的默认开启／默认关闭二选一；验证见设计文档 |
 | [CC Switch Agent 管理参考](research/cc-switch-agent-management-reference.md) | 保留固定源码参考；扩展综合 Agent 管理的建议已停止推进，未运行参考项目 |
 | [安装来源复用](research/installation-source-reuse.md) | 2026-10-16 同源批量调用、临时检查会话、安装前复核和逐项结果验证；不修改原版 CLI |
-| [上游命令映射](research/upstream-command-map.md) | 当前固定 `skills@1.7.4` 的集成参考；统一维护命令/参数与接入边界，不能解释为全部已交付 |
+| [上游命令映射](research/upstream-command-map.md) | 当前固定 `skills@1.8.1` 的集成参考；统一维护命令/参数与接入边界，不能解释为全部已交付 |
 | [脱离 Fork 网络研究](research/leave-fork-network-upstream-sync.md) | 参考研究；本轮未重新联网核验，不自动执行其中 Git 命令 |
 
 - [2026-10-15 UI 一致性走查](research/ui-consistency-audit-2026-10-15.md)：卡片／Pi／共享控件修复、实际走查结果和按优先级区分的待修项。

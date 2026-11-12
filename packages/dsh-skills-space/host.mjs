@@ -434,6 +434,11 @@ export async function apply(ctx) {
             shadowed: members.length > 0 && members.every(member => member.shadowed),
             discoverable: members.length > 0, memberships: members, cliAddressable,
             installation: { source: typeof entry?.source === 'string' ? entry.source : null, sourceType: typeof entry?.sourceType === 'string' ? entry.sourceType : null, sourceUrl: typeof entry?.sourceUrl === 'string' ? entry.sourceUrl : null, version: [entry?.skillFolderHash, entry?.computedHash, entry?.wellKnownDigest].find(value => typeof value === 'string' && value.trim()) ?? null },
+            managedUpdateable: removalAllowed && entries !== undefined && cliAddressable
+              && ['github', 'gitlab', 'git', 'local', 'well-known'].includes(entry?.sourceType)
+              && (entry?.sourceType !== 'git' || typeof entry.sourceUrl === 'string'),
+            managedSyncable: removalAllowed && entries !== undefined && cliAddressable
+              && /^[a-f\d]{40}(?:[a-f\d]{24})?$/i.test(entry?.computedHash || entry?.skillFolderHash || ''),
             managedRemovable: removalAllowed && entries !== undefined && cliAddressable, nativeRemovable: nativePath !== null,
             managed: entries ? managedIds.has(key) : null,
             removable: removalAllowed && entries !== undefined && cliAddressable || nativePath !== null,
@@ -485,6 +490,14 @@ export async function apply(ctx) {
       }
       const item = items.find(item => item.key === skillId);
       if (!item) return Response.json({ error: 'skill' }, { status: 404 });
+      if (url.searchParams.has('diff-status')) {
+        if (!item.public.managed || !item.public.cliAddressable) return Response.json({ modified: false, revision: null });
+        return Response.json(await managed.diffStatus({ path: workspace?.path ?? null }, item.candidate.name, signal));
+      }
+      if (url.searchParams.has('diff')) {
+        if (!item.public.managed || !item.public.cliAddressable) return Response.json({ error: 'diff-unavailable' }, { status: 409 });
+        return Response.json(await managed.reviewDiff({ path: workspace?.path ?? null }, item.candidate.name, url.searchParams.get('revision'), signal));
+      }
       const result = await item.provider.get(item.candidate, options);
       if (result?.name !== item.candidate.name) return Response.json({ error: 'skill' }, { status: 404 });
       const content = await readFile(item.path, 'utf8');
@@ -614,6 +627,23 @@ export async function apply(ctx) {
     });
   }
 
+  async function manageUpdate(action, input, signal) {
+    const workspace = input.workspace == null ? undefined : workspaces().find(row => row.id === input.workspace);
+    if ((input.workspace != null && !workspace) || (workspace && await parentRepository(workspace.path))) throw new InstallRejection('destination');
+    const target = { path: workspace?.path ?? null };
+    if (action === 'update') return managed.update(input.token, target);
+    if (typeof input.skill !== 'string' || !/^[a-f0-9]{64}$/.test(input.skill)) throw new InstallRejection('selection');
+    return withInventory(inventoryPreset(null), workspace, signal, async items => {
+      const item = items.find(candidate => candidate.key === input.skill);
+      if (action === 'sync-preview') {
+        if (!item?.public.managedSyncable) throw new InstallRejection('sync-unavailable');
+        return managed.reviewSync(target, item.candidate.name);
+      }
+      if (!item?.public.managedUpdateable) throw new InstallRejection('update-unavailable');
+      return managed.reviewUpdate(target, item.candidate.name, signal);
+    });
+  }
+
   ctx.effect(() => ctx.connection.fetch.register({
     path: '/api/dsh-skills-space',
     methods: ['GET', 'POST'],
@@ -623,7 +653,7 @@ export async function apply(ctx) {
         const url = new URL(request.url);
         if (request.method === 'POST') {
           const action = url.searchParams.get('action') ?? 'placement';
-          if (!['placement', 'preview', 'install', 'directories', 'create', 'removal-preview', 'remove', 'reveal', 'policy-preview', 'policy', 'open-configuration', 'open-directory'].includes(action) || !localWrite(request, action)) return Response.json({ error: 'forbidden' }, { status: 403 });
+          if (!['placement', 'preview', 'install', 'directories', 'create', 'removal-preview', 'remove', 'reveal', 'policy-preview', 'policy', 'open-configuration', 'open-directory', 'update-preview', 'update', 'sync-preview'].includes(action) || !localWrite(request, action)) return Response.json({ error: 'forbidden' }, { status: 403 });
           const text = await request.text();
           if (text.length > (action === 'placement' ? 256 : 16384)) return Response.json({ error: 'request' }, { status: 400 });
           let input;
@@ -647,6 +677,7 @@ export async function apply(ctx) {
             }catch(error){return Response.json({error:'configuration-open',message:error instanceof Error?error.message:String(error)},{status:503});}
           }
           if (action === 'policy-preview' || action === 'policy') return Response.json(await changePolicy(action, input, request.signal));
+          if (action === 'update-preview' || action === 'update' || action === 'sync-preview') return Response.json(await manageUpdate(action, input, request.signal));
           if (['create', 'removal-preview', 'remove', 'reveal'].includes(action)) return Response.json(await manageFiles(action, input, request.signal));
           if (action !== 'placement') {
             const target = await installationTarget(input);
@@ -664,6 +695,16 @@ export async function apply(ctx) {
         }
         if (url.searchParams.has('store')) return await marketplace(url.searchParams, request.signal);
         if (url.searchParams.has('inventory') || url.searchParams.has('preset')) return await browse(url, request.signal);
+        if (url.searchParams.has('check-updates')) {
+          const workspaceId = url.searchParams.get('workspace');
+          const workspace = workspaceId == null ? undefined : workspaces().find(row => row.id === workspaceId);
+          if (workspaceId != null && (!workspace || await parentRepository(workspace.path))) throw new InstallRejection('destination');
+          const target = { path: workspace?.path ?? null };
+          return Response.json(await withInventory(inventoryPreset(null), workspace, request.signal, async items => {
+            const names = items.filter(item => item.public.managedUpdateable).map(item => item.candidate.name);
+            return managed.checkUpdates(target, names, request.signal);
+          }));
+        }
         const editors = ctx.configEditor.configuration();
         return Response.json({
           configuration: {path:displayPath(profile.patchPath),exists:await access(profile.patchPath).then(()=>true,()=>false),canOpen:process.platform==='darwin'},

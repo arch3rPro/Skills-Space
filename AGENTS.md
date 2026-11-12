@@ -21,6 +21,8 @@ Preserve layout, themes, cards, sidebar and Agent brand icons during functional 
 
 **DSH companion plugin versions:** Do not change the plugin version unless the user explicitly requests a version change. Functional changes, fixes, builds and QA deployments do not authorize a version bump. Keep QA artifacts distinguishable with content hashes in their filenames.
 
+**DSH companion parity:** When changing or adding core skill behavior, inspect the corresponding DSH companion flow. If it applies there, update and verify both surfaces in the same change unit, reusing the highest practical shared implementation. Keep Tauri and DSH Host adapters separate. Record a specific requirement or Host constraint for any intentional difference; do not leave applicable companion behavior stale.
+
 **DSH test environment:** The active clean target is `127.0.0.1:64590`, controlled with `pnpm dev:dsh:clean`; its HOME, DSH_HOME and dedicated browser live under `.scratch/dsh-clean-test`. `pnpm dev:dsh` still targets the retained legacy QA on `64580`. Keep these environments distinct.
 
 **Reuse the existing user flow:** Before implementing a UI for a task the product already supports, identify the closest existing page and its source entry point. Name the steps and states that will use the same implementation and tie each proposed difference to an accepted requirement and a concrete gap. Reuse at the highest applicable level: page flow, layout, interaction and state handling, then shared components, variants and styles. A different Agent, data source or action set does not by itself justify a separate page or flow. Extend the existing implementation at the relevant boundary when it can serve both cases.

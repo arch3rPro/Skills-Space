@@ -41,3 +41,23 @@
   color: var(--foreground);
   color-scheme: inherit;
 }
+
+@container skill-inventory (min-width: 800px) {
+  .dsh-split-layout {
+    height: clamp(20rem, calc(100dvh - 15rem), 48rem);
+  }
+  .dsh-split-layout > [data-slot="card"] {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+.dsh-split-pane {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.dsh-split-pane::-webkit-scrollbar {
+  display: none;
+}

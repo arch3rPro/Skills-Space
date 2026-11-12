@@ -73,8 +73,8 @@ export function CreateSkill({ targets, close, create, restoreFocus, t }: {
   </Modal>;
 }
 
-export function RemoveSkills({ items, excluded = [], native, close, remove, restoreFocus, home, source, onSource, reviewing, t }: {
-  items?: RemovalItem[]; excluded?: RemovalExclusion[]; native: boolean; close: () => void; remove: (items: RemovalItem[]) => Promise<void>; restoreFocus: () => void; home: string;
+export function RemoveSkills({ items, excluded = [], kind, close, remove, restoreFocus, home, source, onSource, reviewing, t }: {
+  items?: RemovalItem[]; excluded?: RemovalExclusion[]; kind: 'native' | 'managed' | 'mixed'; close: () => void; remove: (items: RemovalItem[]) => Promise<void>; restoreFocus: () => void; home: string;
   source?: string; onSource?: () => void; reviewing: boolean; t: Translate;
 }) {
   const [removing, setPending] = useState(false);
@@ -96,8 +96,10 @@ export function RemoveSkills({ items, excluded = [], native, close, remove, rest
     <AlertDialogContent size={items && items.length + excluded.length > 1 ? 'wide' : 'default'} onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(); }}
       onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} aria-busy={pending}>
       <AlertDialogHeader>
-        <AlertDialogTitle>{native ? t("卸载原生技能", "Uninstall native skills") : t("卸载托管技能", "Uninstall managed skills")}</AlertDialogTitle>
-        <AlertDialogDescription>{native
+        <AlertDialogTitle>{t("卸载技能", "Uninstall skills")}</AlertDialogTitle>
+        <AlertDialogDescription>{kind === 'mixed'
+          ? t("共享目录中的技能将卸载，其他目录中的技能将移至废纸篓。", "Skills in shared directories will be uninstalled; skills in other directories will move to Trash.")
+          : kind === 'native'
           ? t("以下文件或目录会移至宿主系统的废纸篓。", "The files or directories below will move to the host system Trash.")
           : t("将从以下共享技能目录卸载所选技能。使用这些目录的 Agent 会受到影响。", "The selected skills will be uninstalled from the shared directories below. Agents using these directories will be affected.")}</AlertDialogDescription>
       </AlertDialogHeader>

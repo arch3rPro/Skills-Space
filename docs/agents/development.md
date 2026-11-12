@@ -4,7 +4,7 @@ Status: Active guidance. Reviewed 2026-10-14.
 
 ## Active runtime
 
-DSH companion development uses the active clean Web environment: `pnpm dev:dsh:clean status|start|open|restart|stop`. Its separate HOME, DSH_HOME and browser data are under `.scratch/dsh-clean-test/`, with Host at `http://127.0.0.1:64590`. The older `pnpm dev:dsh` target at `64580` is retained for historical QA and is not the current clean target. Keep both separate from personal Desktop/Web Profiles; update personal targets only for a requested delivery. See [spec 0012](../specs/0012-dsh-settings-native-skills-rebuild.md#3810-new-clean-test-environment-historical-baseline).
+DSH companion development uses the active clean Web environment: `pnpm dev:dsh:clean status|start|open|restart|stop`. Its separate HOME, DSH_HOME and browser data are under `.scratch/dsh-clean-test/`, with Host at `http://127.0.0.1:64590`. The clean Profile needs the official `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app` bundles before the companion; the base bundle alone does not provide the Web Host services required by the plugin. The older `pnpm dev:dsh` target at `64580` is retained for historical QA and is not the current clean target. Keep both separate from personal Desktop/Web Profiles; update personal targets only for a requested delivery. See [spec 0012](../specs/0012-dsh-settings-native-skills-rebuild.md#3810-new-clean-test-environment-historical-baseline).
 
 | Responsibility | Current entry |
 | --- | --- |

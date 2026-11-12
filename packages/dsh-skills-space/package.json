@@ -15,9 +15,9 @@
     "./icon": "./icon.svg",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["host.mjs", "marketplace.mjs", "managed.mjs", "policy.mjs", "dist/client.js", "dist/discover.mjs", "dist/source.mjs", "dist/policy-state.mjs", "dist/agents.json", "dist/directory-config.mjs", "dist/dsh-skill-version.mjs", "cordis.patch.yml", "icon.svg", "locale/*.json"],
-  "dependencies": {"skills": "1.7.4"},
-  "engines": {"dsh": "0.2.2-rc.1"},
+  "files": ["host.mjs", "marketplace.mjs", "managed.mjs", "policy.mjs", "dist/client.js", "dist/discover.mjs", "dist/source.mjs", "dist/provider.mjs", "dist/download.mjs", "dist/upstream-readonly.mjs", "dist/policy-state.mjs", "dist/agents.json", "dist/directory-config.mjs", "dist/dsh-skill-version.mjs", "cordis.patch.yml", "icon.svg", "locale/*.json"],
+  "dependencies": {"skills": "1.8.1"},
+  "engines": {"dsh": ">=0.2.2-rc.1 <0.2.3-0"},
   "dsh": {
     "manifestVersion": 1,
     "bundle": {"patch": "./cordis.patch.yml"},

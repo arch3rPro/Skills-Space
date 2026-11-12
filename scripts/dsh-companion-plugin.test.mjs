@@ -11,11 +11,12 @@ import { hasNativeTrash, managedCandidate, managedEntries } from "../packages/ds
 import { installSkillPolicy } from "../packages/dsh-skills-space/policy.mjs";
 import { listingDocument, marketplace } from "../packages/dsh-skills-space/marketplace.mjs";
 import { readUpstreamAgents } from "./read-upstream-agents.mjs";
+import { upstreamChunk } from "./upstream-readonly.mjs";
 import ts from "typescript";
 import { dshHomeFromSkillsPath, dshSkillsPath } from "../src/lib/dsh.ts";
-import { filterManagedSkills } from "../src/lib/managed-skill-filters.ts";
+import { filterManagedSkills, managedSkillEnabled } from "../src/lib/managed-skill-filters.ts";
 import { filterDshSkills } from "../src/lib/dsh.ts";
-import { skillCollection, matchesSkillQuery } from "../src/lib/upstream.ts";
+import { skillCollection, skillSourceKind, matchesSkillQuery } from "../src/lib/upstream.ts";
 import { expandHomePath } from "../src/lib/upstream.ts";
 
 const archive = process.env.DSH_COMPANION_TARBALL;
@@ -131,8 +132,8 @@ function lifecycleFixture(t, source, packed = false, isolatedSource = false) {
     else {
       mkdirSync(join(installed, "dist"));
       for (const name of ["managed.mjs", "marketplace.mjs"]) writeFileSync(join(installed, name), readFileSync(new URL(`../packages/dsh-skills-space/${name}`, import.meta.url)));
-      for (const [source, name] of [["inspect-upstream-discovery.mjs", "discover.mjs"], ["inspect-upstream-source.mjs", "source.mjs"], ["dsh-skill-version.mjs", "dsh-skill-version.mjs"]]) writeFileSync(join(installed, "dist", name), readFileSync(new URL(source, import.meta.url)));
-      writeFileSync(join(installed, "dist", "agents.json"), JSON.stringify(readUpstreamAgents(readFileSync(join(dirname(cliPackage), "dist/cli.mjs"), "utf8"))));
+      for (const [source, name] of [["inspect-upstream-discovery.mjs", "discover.mjs"], ["inspect-upstream-source.mjs", "source.mjs"], ["inspect-upstream-provider.mjs", "provider.mjs"], ["prepare-upstream-download.mjs", "download.mjs"], ["upstream-readonly.mjs", "upstream-readonly.mjs"], ["dsh-skill-version.mjs", "dsh-skill-version.mjs"]]) writeFileSync(join(installed, "dist", name), readFileSync(new URL(source, import.meta.url)));
+      writeFileSync(join(installed, "dist", "agents.json"), JSON.stringify(readUpstreamAgents(readFileSync(join(dirname(cliPackage), upstreamChunk), "utf8"))));
     }
     mkdirSync(join(installed, "node_modules"));
     symlinkSync(dirname(cliPackage), join(installed, "node_modules", "skills"), "junction");
@@ -179,20 +180,23 @@ test("the final archive matches current Host, Client and freshly derived helper 
   skip: !archive && "Set DSH_COMPANION_TARBALL to the final candidate artifact",
 }, () => {
   const read = name => execFileSync("tar", ["-xOf", archive, `package/${name}`], { maxBuffer: 16 * 1024 * 1024 });
-  for (const name of ["package.json", "host.mjs", "managed.mjs", "marketplace.mjs", "policy.mjs", "cordis.patch.yml", "icon.svg", "locale/zh.json", "locale/en.json", "dist/client.js"]) {
+  for (const name of ["host.mjs", "managed.mjs", "marketplace.mjs", "policy.mjs", "cordis.patch.yml", "icon.svg", "locale/zh.json", "locale/en.json", "dist/client.js"]) {
     assert.deepEqual(read(name), readFileSync(new URL(`../packages/dsh-skills-space/${name}`, import.meta.url)), `Archive contains stale ${name}`);
   }
   assert.deepEqual(read("dist/discover.mjs"), readFileSync(new URL("./inspect-upstream-discovery.mjs", import.meta.url)));
   assert.deepEqual(read("dist/source.mjs"), readFileSync(new URL("./inspect-upstream-source.mjs", import.meta.url)));
+  assert.deepEqual(read("dist/upstream-readonly.mjs"), readFileSync(new URL("./upstream-readonly.mjs", import.meta.url)));
   assert.deepEqual(read("dist/policy-state.mjs"), readFileSync(new URL("./dsh-skill-policy/state.mjs", import.meta.url)));
   assert.deepEqual(read("dist/directory-config.mjs"), readFileSync(new URL("./dsh-directory-config.mjs", import.meta.url)));
   assert.deepEqual(read("dist/dsh-skill-version.mjs"), readFileSync(new URL("./dsh-skill-version.mjs", import.meta.url)));
-  const original = readFileSync(join(dirname(require.resolve("skills/package.json")), "dist/cli.mjs"), "utf8");
-  const agents = readUpstreamAgents(original).map(({ id, projectPath, globalBase, globalPath }) => ({ id, projectPath, globalBase, globalPath }));
+  const original = readFileSync(join(dirname(require.resolve("skills/package.json")), upstreamChunk), "utf8");
+  const agents = readUpstreamAgents(original).map(({ id, projectPath, globalBase, globalPath, globalReadsCanonical }) => ({ id, projectPath, globalBase, globalPath, globalReadsCanonical }));
   assert.deepEqual(JSON.parse(read("dist/agents.json")), agents);
   const manifest = JSON.parse(read("package.json"));
-  assert.equal(manifest.dependencies.skills, "1.7.4");
-  assert.equal(manifest.engines.dsh, "0.2.2-rc.1");
+  const sourceManifest = JSON.parse(readFileSync(new URL("../packages/dsh-skills-space/package.json", import.meta.url)));
+  assert.deepEqual({ ...manifest, scripts: { ...manifest.scripts, prepack: sourceManifest.scripts.prepack } }, sourceManifest);
+  assert.equal(manifest.dependencies.skills, "1.8.1");
+  assert.equal(manifest.engines.dsh, ">=0.2.2-rc.1 <0.2.3-0");
   assert.equal(manifest.scripts.postinstall, undefined);
 });
 
@@ -412,7 +416,7 @@ test("partial native removal retains failed physical IDs even when names match; 
     const items = [{ id: "first", name: "same", revision: "r1" }, { id: "second", name: native ? "same" : "different", revision: "r2" }];
     const destination = { preset: "standard", workspace: "project-a" };
     const { removeSkills } = handlers("src/client.tsx", ["removeSkills"], {
-      removal: { destination, collection: native ? "native" : "managed", excluded: [{ id: "excluded", name: "excluded", reason: "removal-unavailable" }] }, context: "project-a",
+      removal: { destination, kinds: { first: native ? "native" : "managed", second: native ? "native" : "managed" }, excluded: [{ id: "excluded", name: "excluded", reason: "removal-unavailable" }] }, context: "project-a",
       items: [...items, { id: "excluded" }], selecting: true, detail: undefined, removalReason: reason => reason,
       writeRequest: async (action, payload) => {
         assert.equal(action, "remove");
@@ -432,17 +436,57 @@ test("partial native removal retains failed physical IDs even when names match; 
   }
 });
 
+test("one mixed removal confirmation keeps CLI and Trash actions separate", async () => {
+  const selected = [
+    { id: "shared", name: "shared", path: "/shared/SKILL.md", removable: true, revision: "r1" },
+    { id: "private", name: "private", path: "/private/SKILL.md", removable: true, revision: "r2" },
+  ];
+  const destination = { workspace: "project-a" };
+  const calls = [];
+  let removal;
+  const writeRequest = async (action, payload) => {
+    calls.push([action, payload.collection, payload.skills.map(item => item.id)]);
+    if (action === "removal-preview") return { items: selected.filter(item => item.id === payload.skills[0].id), excluded: [] };
+    return payload.collection === "managed"
+      ? { removed: ["shared"], failed: false }
+      : { removed: ["private"], removedIds: ["private"], failed: false };
+  };
+  const context = "project-a", activeContext = { current: context };
+  const { reviewRemoval } = handlers("src/client.tsx", ["reviewRemoval"], {
+    busy: false, destination, context, activeContext, batchLimit: 10, reviewing: false,
+    rememberTrigger() {}, setReviewing() {}, notifyError: () => assert.fail("Review must succeed"),
+    writeRequest, setRemoval: value => { removal = value; }, skillLifecycle: item => item.id === "shared" ? "managed" : "native", t: zh => zh,
+  });
+  await reviewRemoval(selected, { focus() {} });
+  assert.deepEqual(removal.items.map(item => item.id), ["shared", "private"]);
+  assert.deepEqual(removal.kinds, { shared: "managed", private: "native" });
+  let success = "", mutationCount = 0;
+  const { removeSkills } = handlers("src/client.tsx", ["removeSkills"], {
+    removal, context, items: selected, selecting: true, detail: undefined, writeRequest,
+    onMutation: () => { mutationCount++; }, setSelection: value => assert.equal(value, undefined),
+    setOpenSkill() {}, setRemovalResult: () => assert.fail("Complete removal must not show partial results"),
+    notifySuccess: value => { success = value; }, t: zh => zh,
+  });
+  await removeSkills(selected);
+  assert.deepEqual(calls, [
+    ["removal-preview", "managed", ["shared"]], ["removal-preview", "native", ["private"]],
+    ["remove", "managed", ["shared"]], ["remove", "native", ["private"]],
+  ]);
+  assert.equal(mutationCount, 1);
+  assert.match(success, /2/);
+});
+
 test("a removal review resolving after a project change cannot open a confirmation in the new project", async () => {
   const pending = deferred(), activeContext = { current: "project-a" };
   let removal;
   const { reviewRemoval } = handlers("src/client.tsx", ["reviewRemoval"], {
-    busy: false, destination: { preset: "standard", workspace: "project-a" }, collection: "managed", context: "project-a", activeContext,
+    busy: false, destination: { preset: "standard", workspace: "project-a" }, context: "project-a", activeContext,
     rememberTrigger() {}, batchLimit: 100, setReviewing() {}, notifyError: () => assert.fail("Must not notify the obsolete project"),
-    writeRequest: () => pending.promise, setRemoval: value => { removal = value; }, t: zh => zh,
+    writeRequest: () => pending.promise, setRemoval: value => { removal = value; }, skillLifecycle: () => "managed", t: zh => zh,
   });
   const read = reviewRemoval([{ id: "selected", removable: true }], { focus: () => assert.fail("Must not focus the obsolete project") });
   activeContext.current = "project-b";
-  pending.resolve([{ id: "selected", revision: "old-project" }]);
+  pending.resolve({ items: [{ id: "selected", revision: "old-project" }], excluded: [] });
   await read;
   assert.equal(removal, undefined);
 });
@@ -551,10 +595,12 @@ test("a failed ownership read retains known managed items, freezes removal, and 
 
 test("pinned original Agent metadata preserves shared target and configurable Agent roots without staging", () => {
   const packageRoot = dirname(require.resolve("skills/package.json"));
-  const agents = readUpstreamAgents(readFileSync(join(packageRoot, "dist/cli.mjs"), "utf8"));
+  const agents = readUpstreamAgents(readFileSync(join(packageRoot, upstreamChunk), "utf8"));
   assert.equal(agents.length, 79);
   assert.equal(new Set(agents.map(agent => agent.id)).size, 79);
   assert.equal(agents.find(agent => agent.id === "codex").projectPath, ".agents/skills");
+  assert.equal(agents.find(agent => agent.id === "antigravity").globalReadsCanonical, false);
+  assert.equal(agents.find(agent => agent.id === "universal").globalReadsCanonical, true);
   assert.equal(agents.find(agent => agent.id === "universal").globalBase, "configHome");
   assert.equal(agents.find(agent => agent.id === "universal").globalPath, "agents/skills");
   // Installation special-cases universal to the canonical ~/.agents directory;
@@ -610,7 +656,7 @@ test("local source preview installs through the original CLI and rejects changed
 test("HTTPS Git URL and explicit ref are pinned before the original CLI installs", { skip: !process.env.DSH_COMPANION_GIT_SOURCE && "Select a public HTTPS Git source explicitly" }, t => {
   lifecycleFixture(t, `
     import assert from "node:assert/strict";
-    import { mkdir, readFile } from "node:fs/promises";
+    import { mkdir, readFile, writeFile } from "node:fs/promises";
     import { join } from "node:path";
     const [root, module] = process.argv.slice(1);
     const { managedLifecycle, managedEntries } = await import(module);
@@ -623,6 +669,120 @@ test("HTTPS Git URL and explicit ref are pinned before the original CLI installs
     assert.deepEqual(result, { installed: [name], failed: false });
     assert.ok(Object.hasOwn(await managedEntries(project), name));
     assert.match(await readFile(join(project, ".agents/skills", name, "SKILL.md"), "utf8"), new RegExp("name: " + name));
+  `, Boolean(archive), true);
+});
+
+test("managed update and sync verify the recorded revision and affect only the selected project", t => {
+  lifecycleFixture(t, `
+    import assert from "node:assert/strict";
+    import { mkdir, readFile, writeFile } from "node:fs/promises";
+    import { join } from "node:path";
+    const [root, module] = process.argv.slice(1);
+    const { managedLifecycle, managedEntries } = await import(module);
+    const lifecycle = managedLifecycle((_path, write) => write());
+    const source = join(root, "source"), first = join(root, "first"), second = join(root, "second");
+    await Promise.all([source, first, second].map(path => mkdir(path)));
+    const file = join(source, "SKILL.md");
+    const body = text => "---\\nname: update-fixture\\ndescription: Isolated update\\n---\\n" + text + "\\n";
+    await writeFile(file, body("One"));
+    const a = { path: first }, b = { path: second }, signal = new AbortController().signal;
+    const initial = await lifecycle.preview(source, a, signal);
+    assert.deepEqual(await lifecycle.install(initial.token, ["update-fixture"], a), { installed: ["update-fixture"], failed: false });
+    assert.equal((await lifecycle.checkUpdates(a, ["update-fixture"], signal))[0].status, "current");
+    assert.equal((await lifecycle.reviewSync(a, "update-fixture")).source, join(first, ".agents/skills/update-fixture"));
+    assert.equal((await lifecycle.diffStatus(a, "update-fixture")).modified, false);
+    await writeFile(file, body("Two"));
+    assert.equal((await lifecycle.checkUpdates(a, ["update-fixture"], signal))[0].status, "available");
+    const review = await lifecycle.reviewUpdate(a, "update-fixture", signal);
+    assert.equal(review.changed, true);
+    assert.equal(review.localModified, false);
+    assert.deepEqual(review.changedFiles, ["SKILL.md"]);
+    assert.deepEqual(await lifecycle.update(review.token, a), { updated: ["update-fixture"], failed: false });
+    assert.equal((await lifecycle.checkUpdates(a, ["update-fixture"], signal))[0].status, "current");
+    assert.equal(await readFile(join(first, ".agents/skills/update-fixture/SKILL.md"), "utf8"), body("Two"));
+    const sync = await lifecycle.reviewSync(a, "update-fixture");
+    const copied = await lifecycle.preview(sync.source, b, signal);
+    assert.deepEqual(await lifecycle.install(copied.token, [sync.name], b), { installed: ["update-fixture"], failed: false });
+    assert.ok(Object.hasOwn(await managedEntries(second), "update-fixture"));
+    const global = { path: null };
+    const globalInstall = await lifecycle.preview(source, global, signal);
+    assert.deepEqual(await lifecycle.install(globalInstall.token, ["update-fixture"], global), { installed: ["update-fixture"], failed: false });
+    assert.equal((await lifecycle.reviewSync(global, "update-fixture")).name, "update-fixture");
+    await writeFile(file, body("Three"));
+    assert.equal((await lifecycle.checkUpdates(global, ["update-fixture"], signal))[0].status, "available");
+    const globalReview = await lifecycle.reviewUpdate(global, "update-fixture", signal);
+    assert.equal(globalReview.changed, true);
+    assert.deepEqual(await lifecycle.update(globalReview.token, global), { updated: ["update-fixture"], failed: false });
+    assert.equal(await readFile(join(root, "home/.agents/skills/update-fixture/SKILL.md"), "utf8"), body("Three"));
+    assert.equal(await readFile(join(second, ".agents/skills/update-fixture/SKILL.md"), "utf8"), body("Two"));
+    await writeFile(join(first, ".agents/skills/update-fixture/SKILL.md"), body("Local edit"));
+    const status = await lifecycle.diffStatus(a, "update-fixture");
+    assert.equal(status.modified, true);
+    await assert.rejects(lifecycle.reviewDiff(a, "update-fixture", status.revision, signal), { message: "diff-unavailable" });
+    await writeFile(file, body("Two"));
+    const difference = await lifecycle.reviewDiff(a, "update-fixture", status.revision, signal);
+    assert.equal(difference.files.length, 1);
+    assert.equal(difference.files[0].path, "SKILL.md");
+    assert.match(difference.files[0].diff, /-Two/);
+    assert.ok(difference.files[0].diff.includes("+Local edit"));
+    await assert.rejects(lifecycle.reviewDiff(a, "update-fixture", "0".repeat(64), signal), { message: "diff-changed" });
+    await assert.rejects(lifecycle.reviewSync(a, "update-fixture"), { message: "sync-unavailable" });
+    assert.equal(await readFile(join(second, ".agents/skills/update-fixture/SKILL.md"), "utf8"), body("Two"));
+  `, Boolean(archive), true);
+});
+
+test("website index and direct skill download preview through the pinned provider before original CLI installation", t => {
+  lifecycleFixture(t, `
+    import assert from "node:assert/strict";
+    import { createServer } from "node:http";
+    import { mkdir, readFile, writeFile } from "node:fs/promises";
+    import { join } from "node:path";
+    const [root, module] = process.argv.slice(1);
+    const { managedLifecycle, managedEntries } = await import(module);
+    const lifecycle = managedLifecycle((_path, write) => write());
+    const project = join(root, "project"); await mkdir(project);
+    const skill = name => "---\\nname: " + name + "\\ndescription: Website fixture\\n---\\nWebsite body\\n";
+    let indexed = false;
+    let websiteBody = skill("website-fixture");
+    const server = createServer((request, response) => {
+      if (indexed && request.url === "/.well-known/agent-skills/index.json") {
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ skills: [{ name: "website-fixture", description: "Website fixture", files: ["SKILL.md"] }] }));
+      } else if (request.url === "/.well-known/agent-skills/website-fixture/SKILL.md") response.end(websiteBody);
+      else if (request.url === "/direct/SKILL.md") response.end(skill("download-fixture"));
+      else { response.statusCode = 404; response.end(); }
+    });
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const origin = "http://127.0.0.1:" + server.address().port;
+      const target = { path: project }, signal = new AbortController().signal;
+      const direct = await lifecycle.preview(origin + "/direct/SKILL.md", target, signal);
+      assert.deepEqual(direct.skills.map(row => row.name), ["download-fixture"]);
+      assert.deepEqual(await lifecycle.install(direct.token, ["download-fixture"], target), { installed: ["download-fixture"], failed: false, collection: "native" });
+      assert.equal(await readFile(join(project, ".agents/skills/download-fixture/SKILL.md"), "utf8"), skill("download-fixture"));
+      indexed = true;
+      const website = await lifecycle.preview(origin, target, signal);
+      assert.deepEqual(website.skills.map(row => row.name), ["website-fixture"]);
+      websiteBody += "Changed before install\\n";
+      await assert.rejects(lifecycle.install(website.token, ["website-fixture"], target), { message: "preview-expired" });
+      assert.ok(!Object.hasOwn(await managedEntries(project), "website-fixture"));
+      websiteBody = skill("website-fixture");
+      const refreshed = await lifecycle.preview(origin, target, signal);
+      assert.deepEqual(await lifecycle.install(refreshed.token, ["website-fixture"], target), { installed: ["website-fixture"], failed: false });
+      assert.ok(Object.hasOwn(await managedEntries(project), "website-fixture"));
+      websiteBody += "Version two\\n";
+      const update = await lifecycle.reviewUpdate(target, "website-fixture", signal);
+      assert.equal(update.changed, true);
+      assert.deepEqual(await lifecycle.update(update.token, target), { updated: ["website-fixture"], failed: false });
+      assert.equal(await readFile(join(project, ".agents/skills/website-fixture/SKILL.md"), "utf8"), websiteBody);
+      assert.equal((await lifecycle.diffStatus(target, "website-fixture")).modified, false);
+      await writeFile(join(project, ".agents/skills/website-fixture/SKILL.md"), websiteBody + "Local edit\\n");
+      const status = await lifecycle.diffStatus(target, "website-fixture");
+      assert.equal(status.modified, true);
+      const difference = await lifecycle.reviewDiff(target, "website-fixture", status.revision, signal);
+      assert.equal(difference.files[0].path, "SKILL.md");
+      assert.ok(difference.files[0].diff.includes("+Local edit"));
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   `, Boolean(archive), true);
 });
 
@@ -1022,7 +1182,7 @@ test("shared installation progress dismisses its loading notification when a pha
 
 
 test("managed and discovery projections overlap while preset filtering preserves lifecycle ownership", () => {
-  const { managedSkills, nativeSkills, filterInventory } = handlers("src/inventory.ts", ["asInstalled", "managedSkills", "nativeSkills", "filterInventory"], { filterManagedSkills, filterDshSkills, skillCollection, matchesSkillQuery });
+  const { managedSkills, nativeSkills, inventorySkills, skillLifecycle, inventorySourceKey, filterInventory } = handlers("src/inventory.ts", ["asInstalled", "managedSkills", "nativeSkills", "inventorySkills", "skillLifecycle", "inventorySourceKey", "filterInventory"], { filterManagedSkills, managedSkillEnabled, filterDshSkills, skillCollection, skillSourceKind, matchesSkillQuery });
   const shared = { id: "shared", name: "same-name", path: "/shared/SKILL.md", description: "Shared source", source: "user-agents", managed: true, cliAddressable: true, discoverable: true, managedRemovable: true, nativeRemovable: false, installation: { source: "owner/repository", sourceType: "github", sourceUrl: "https://example.org/source" }, state: { file: "/shared/SKILL.md", source: "user-agents", cliAddressable: true, policyEnabled: true, memberships: [{ presetKey: "standard", source: "user-agents", shadowed: true }, { presetKey: "creator", source: "custom", shadowed: false }] } };
   const privateSkill = { ...shared, id: "private", source: "user-dsh", path: "/private/SKILL.md", managed: false, cliAddressable: false, managedRemovable: false, nativeRemovable: true, state: { ...shared.state, file: "/private/SKILL.md", source: "user-dsh", cliAddressable: false, memberships: [{ presetKey: "standard", shadowed: false }] } };
   const inventory = [shared, privateSkill];
@@ -1034,6 +1194,17 @@ test("managed and discovery projections overlap while preset filtering preserves
   assert.equal(nativeSkills(inventory, "standard").find(item => item.id === "shared").source, "user-agents");
   assert.equal(nativeSkills(inventory, "creator")[0].source, "custom");
   assert.equal(nativeSkills(inventory, "creator")[0].removable, false);
+  assert.deepEqual(inventorySkills(inventory, "all").map(item => item.id), ["shared", "private"], "Discovery and CLI ownership do not duplicate a physical skill");
+  assert.equal(inventorySkills(inventory, "all")[0].removable, true, "The shared skill retains CLI removal");
+  assert.equal(inventorySkills(inventory, "all")[1].removable, true, "The independent skill retains Trash removal");
+  assert.deepEqual(inventorySkills(inventory, "creator").map(item => item.id), ["shared"]);
+  assert.equal(inventorySkills(inventory, "creator")[0].removable, true);
+  assert.deepEqual(inventorySkills([{ ...shared, discoverable: false }, privateSkill], "all").map(item => item.id), ["private", "shared"], "An installed but undiscovered CLI skill remains visible in the aggregate");
+  assert.deepEqual(inventorySkills([{ ...shared, discoverable: false }, privateSkill], "standard").map(item => item.id), ["private"]);
+  assert.equal(skillLifecycle(inventorySkills(inventory, "all")[0]), "managed");
+  assert.equal(skillLifecycle(inventorySkills(inventory, "all")[1]), "native");
+  assert.deepEqual(filterInventory(inventorySkills(inventory, "all"), "all", "", "directory:local", "all").map(item => item.id), ["private"]);
+  assert.equal(inventorySourceKey({ ...shared, managed: false, installation: undefined }), "directory:local", "Untracked shared files show their directory source");
   assert.equal(managedSkills([{ ...shared, managed: false }]).length, 1, "Untracked standard targets retain CLI lifecycle");
   assert.equal(filterInventory(managedSkills(inventory), "managed", "EXAMPLE.ORG", "git", "enabled").length, 1);
   assert.equal(filterInventory(managedSkills(inventory), "managed", "", "local", "all").length, 0);

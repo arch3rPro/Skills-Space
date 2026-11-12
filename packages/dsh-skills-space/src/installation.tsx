@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { AgentLogo } from "@/components/agent-logo";
 import { Modal, ModalActions } from "@/components/modal";
 import { InstallSourceStep, InstallSelectionStep } from "@/components/install-steps";
@@ -17,18 +17,19 @@ import { Choice } from "./choice";
 export type Destination = { workspace: string | null };
 export type InstallationStart = { source?: string; skills?: string[]; destination: Destination };
 export type InstallPreview = { token: string; skills: { name: string; description: string; internal?: boolean }[]; skillFilter?: string | null; warnings?: string[] };
-export type InstallResult = { installed: string[]; failed: boolean };
+export type InstallResult = { installed: string[]; failed: boolean; collection?: 'managed' | 'native' };
 
 export function Installation({ config, start, preview, install, chooseDirectory, onClose, onComplete, t }: {
   config: Bootstrap; start: InstallationStart;
   preview: (source: string, destination: Destination, includeInternal: boolean) => Promise<InstallPreview>;
   install: (token: string, names: string[], destination: Destination) => Promise<InstallResult>;
   chooseDirectory: () => Promise<string | null>;
-  onClose: () => void; onComplete: (target: Destination) => void; t: Translate;
+  onClose: () => void; onComplete: (target: Destination, collection: 'managed' | 'native') => void; t: Translate;
 }) {
   const formId = useId();
   const zh = t("zh", "en") === "zh";
-  const [step, setStep] = useState(0);
+  const syncing = !!start.skills?.length;
+  const [step, setStep] = useState(syncing ? 2 : 0);
   const [source, setSource] = useState(start.source ?? "");
   const [destination, setDestination] = useState(() => {
     if (start.destination.workspace && config.workspaces.some(item => item.id === start.destination.workspace && item.installable)) return start.destination;
@@ -39,7 +40,7 @@ export function Installation({ config, start, preview, install, chooseDirectory,
   const [plan, setPlan] = useState<InstallPreview>();
   const [selected, setSelected] = useState<string[]>([]);
   const [requested, setRequested] = useState(start.skills ?? []);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(syncing);
   const [message, setMessage] = useState("");
   const [uncertain, setUncertain] = useState(false);
   const [result, setResult] = useState<InstallResult>();
@@ -49,6 +50,18 @@ export function Installation({ config, start, preview, install, chooseDirectory,
   const installTarget: Target = { host: "local", scope: destination.workspace ? "project" : "global", projectPath: workspace ? expandHomePath(workspace.path, config.userHome) : null };
   const chosen = plan?.skills.filter(skill => selected.includes(skill.name)) ?? [];
   const agents = [{ id: "deepseek-harness", name: "DeepSeek Harness" }];
+  useEffect(() => {
+    if (!syncing || !start.source) return;
+    let active = true;
+    void preview(start.source, start.destination, true).then(inspected => {
+      if (!active) return;
+      if (requested.some(name => !inspected.skills.some(skill => skill.name === name))) throw new Error('sync-source');
+      setPlan(inspected); setPlanDestination(start.destination); setSelected(requested); setStep(2);
+    }).catch(() => {
+      if (active) { setStep(0); setMessage(t('同步来源已变化，请重新检查。', 'The sync source changed. Check it again.')); }
+    }).finally(() => { if (active) setBusy(false); });
+    return () => { active = false; };
+  }, []);
   useInstallationProgress(busy ? { stage: step === 3 ? "installing" : "checking", detail: null, completed: 0, total: step === 3 ? selected.length : 0 } : null, zh);
   const operationResult: OperationResult | undefined = result && {
     inventory: null,
@@ -68,7 +81,8 @@ export function Installation({ config, start, preview, install, chooseDirectory,
       if (step === 3 && plan) {
         const response = await install(plan.token, selected, destination);
         setResult(response); setStep(4);
-        if (!response.failed) notifySuccess(t(`已安装 ${response.installed.length} 项。`, `Installed ${response.installed.length} skills.`));
+        if (response.failed) setUncertain(true);
+        if (!response.failed) notifySuccess(syncing ? t(`已同步 ${response.installed.length} 项。`, `Synced ${response.installed.length} skills.`) : t(`已安装 ${response.installed.length} 项。`, `Installed ${response.installed.length} skills.`));
       } else {
         const inspectionTarget = eligible ? destination : { workspace: config.installGlobal ? null : config.workspaces.find(item => item.installable)?.id ?? null };
         const inspected = await preview(source.trim(), inspectionTarget, includeInternal);
@@ -96,16 +110,17 @@ export function Installation({ config, start, preview, install, chooseDirectory,
           : t('无法读取来源中的可安装技能，请检查来源路径、仓库权限或网络后重试。', 'Could not read installable skills. Check the source path, repository access or connection and try again.'));
     } finally { setBusy(false); }
   }
-  return <Modal open title={t("安装技能", "Install skills")} busy={busy} tall={step === 1 || step === 2} onClose={onClose} bodyStep={step}>
+  return <Modal open title={syncing ? t("同步技能", "Sync skill") : t("安装技能", "Install skills")} busy={busy} tall={step === 1 || step === 2} onClose={onClose} bodyStep={step}>
     <form id={formId} onSubmit={event => void submit(event)} className="flex min-w-0 flex-col gap-5">
-      <StepIndicator steps={zh ? ["安装来源", "技能", "安装目标", "确认", "结果"] : ["Source", "Skills", "Targets", "Review", "Result"]} current={step} />
-      {step === 0 && <InstallSourceStep zh={zh} disabled={busy} allowDownload={false} value={displayHomePath(source, config.userHome)}
+      <StepIndicator steps={syncing && step >= 2 ? zh ? ["安装目标", "确认", "结果"] : ["Targets", "Review", "Result"] : zh ? ["安装来源", "技能", "安装目标", "确认", "结果"] : ["Source", "Skills", "Targets", "Review", "Result"]} current={syncing && step >= 2 ? step - 2 : step} />
+      {syncing && step === 2 && !plan && <p className="text-sm text-muted-foreground" role="status">{t('正在检查同步来源…', 'Checking sync source…')}</p>}
+      {step === 0 && <InstallSourceStep zh={zh} disabled={busy} allowDownload value={displayHomePath(source, config.userHome)}
         onChange={value => { setSource(expandHomePath(value, config.userHome)); reset(selected.length ? selected : requested); }}
         onBrowse={() => { void chooseDirectory().then(path => { if (path) { setSource(path); reset(selected.length ? selected : requested); } }).catch(() => notifyError(t("目录选择器无法打开，请直接输入路径。", "Could not open the folder picker. Enter the path directly."), zh)); }}
         includeInternal={includeInternal} onIncludeInternal={include => { setIncludeInternal(include); reset(selected.length ? selected : requested); }}/>}
       {step === 1 && plan && <InstallSelectionStep skills={plan.skills} selected={selected} onSelect={setSelected}
         disabled={busy} zh={zh} skillFilter={plan.skillFilter} warnings={plan.warnings?.map(warning=>displayHomePath(warning,config.userHome))}/>}
-      {step === 2 && <FieldGroup>
+      {step === 2 && (!syncing || plan) && <FieldGroup>
         <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           <Field><FieldLabel htmlFor={`${formId}-scope`}>{t("安装范围", "Installation scope")}</FieldLabel>
             <Choice id={`${formId}-scope`} label={t("安装范围", "Installation scope")} value={destination.workspace ?? "global"} disabled={busy}
@@ -121,13 +136,13 @@ export function Installation({ config, start, preview, install, chooseDirectory,
       {step === 4 && operationResult && <OperationResults result={operationResult} operation={null} home={config.userHome} zh={zh} busy={busy} inventoryExpected={false} />}
       {message && <Alert variant="destructive"><AlertDescription role="alert">{message}</AlertDescription></Alert>}
       <ModalActions>
-        {step > 0 && step < 4 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setMessage(""); setStep(step === 2 && !plan ? 0 : step - 1); }}>{t("上一步", "Back")}</Button>}
-        {(result?.installed.length || uncertain) ? <Button type="button" variant="outline" disabled={busy} onClick={() => onComplete(destination)}>{uncertain ? t("核对目标托管技能", "Inspect managed destination") : t("查看技能", "View skills")}</Button> : null}
+        {step > (syncing ? 2 : 0) && step < 4 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setMessage(""); setStep(step - 1); }}>{t("上一步", "Back")}</Button>}
+        {(result?.installed.length || uncertain) ? <Button type="button" variant="outline" disabled={busy} onClick={() => onComplete(destination, result?.collection ?? 'managed')}>{uncertain ? t("核对目标技能", "Inspect destination skills") : t("查看技能", "View skills")}</Button> : null}
         {step === 4 ? <>
           {remaining.length > 0 && <Button type="button" disabled={busy} onClick={() => reset(remaining)}>{t("重新检查", "Check again")}</Button>}
           <Button type="button" onClick={onClose}>{t("完成", "Done")}</Button>
-        </> : <Button form={formId} type="submit" disabled={busy || step === 0 && !source.trim() || (step === 1 || step === 3) && !selected.length || (step === 2 || step === 3) && !eligible}>
-          {busy ? t("处理中…", "Working…") : step === 0 ? t("检查来源", "Inspect source") : step === 3 ? t("确认安装", "Install") : t("下一步", "Next")}
+        </> : <Button form={formId} type="submit" disabled={busy || syncing && step === 2 && !plan || step === 0 && !source.trim() || (step === 1 || step === 3) && !selected.length || (step === 2 || step === 3) && !eligible}>
+          {busy ? t("处理中…", "Working…") : step === 0 ? t("检查来源", "Inspect source") : step === 3 ? syncing ? t("确认同步", "Sync") : t("确认安装", "Install") : t("下一步", "Next")}
         </Button>}
       </ModalActions>
     </form>
