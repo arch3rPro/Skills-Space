@@ -27,7 +27,7 @@ type Outcome={file:string;name:string;status:'complete'|'failed'|'skipped';messa
 export function DshBatchActions(props:Props){
   return <BulkSelectionBar framed count={props.skills.length} disabled={props.disabled} zh={props.zh} onSelectAll={props.onSelectAll} onInvert={props.onInvert}><DshBatchControls {...props}/></BulkSelectionBar>;
 }
-export function DshBatchControls({skills,target,contextKey,revision,policyRevision,home,disabled,zh,onBusy,onSnapshot,onChanged,allowRemoval=true,showControls=true,savePolicy,controller,maxPolicySkills}:Omit<Props,'onSelectAll'|'onInvert'>&{allowRemoval?:boolean;showControls?:boolean;savePolicy?:(change:DshPolicySubmission)=>Promise<DshSnapshot|void>;controller?:Ref<DshBatchController>;maxPolicySkills?:number}){
+export function DshBatchControls({skills,target,contextKey,revision,policyRevision,home,disabled,zh,onBusy,onSnapshot,onChanged,allowRemoval=true,removalLabel,showControls=true,savePolicy,controller,maxPolicySkills}:Omit<Props,'onSelectAll'|'onInvert'>&{allowRemoval?:boolean;removalLabel?:string;showControls?:boolean;savePolicy?:(change:DshPolicySubmission)=>Promise<DshSnapshot|void>;controller?:Ref<DshBatchController>;maxPolicySkills?:number}){
   const t=(cn:string,en:string)=>zh?cn:en;
   const [action,setAction]=useState<DshPolicyAction|'trash'|null>(null);
   const [plans,setPlans]=useState<DshRemoval[]>([]);
@@ -146,7 +146,7 @@ export function DshBatchControls({skills,target,contextKey,revision,policyRevisi
         const value=`${channel.value}-${state}` as const;
         return <DropdownMenuItem key={state} disabled={!actionAvailable(value)} onSelect={()=>{queuedInvocation.current=value;setInvocationOpen(false);}}>{state==='on'?t('开启','On'):t('关闭','Off')}</DropdownMenuItem>;
       })}</DropdownMenuGroup></DropdownMenuSubContent></DropdownMenuSub>)}</DropdownMenuGroup></DropdownMenuContent></DropdownMenu>
-      {allowRemoval&&<Hint text={!trashCount?t("所选技能不支持独立移除；共享、托管和内置内容受保护。","The selected skills cannot be removed independently; shared, managed and bundled files are protected."):undefined} disabled={disabled||!trashCount}><Button size="sm" variant="destructive" disabled={disabled||!trashCount} onClick={()=>void review('trash')}>{t('卸载','Uninstall')}</Button></Hint>}
+      {allowRemoval&&<Hint text={!trashCount?t("所选技能不支持独立移除；共享、托管和内置内容受保护。","The selected skills cannot be removed independently; shared, managed and bundled files are protected."):undefined} disabled={disabled||!trashCount}><Button size="sm" variant="destructive" disabled={disabled||!trashCount} onClick={()=>void review('trash')}>{removalLabel??t('卸载','Uninstall')}</Button></Hint>}
     </>}
     <Modal title={results?t('批量操作结果','Batch results'):action==='trash'?t('卸载技能？','Uninstall skills?'):actionTitle} open={action!==null} busy={running||preparing} onClose={()=>setAction(null)}>
       <div className="flex flex-col gap-4 text-sm">

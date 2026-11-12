@@ -2,7 +2,7 @@ import { BotIcon, CircleAlertIcon, FolderOpenIcon, PackagePlusIcon, SearchIcon }
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 
-export type InventoryEmptyKind = "failed" | "uninstalled" | "filtered" | "native" | "managed";
+export type InventoryEmptyKind = "failed" | "uninstalled" | "filtered" | "empty" | "native" | "managed";
 
 export function InventoryEmpty({ kind, zh, disabled, onRetry, onClear, onAdd }: {
   kind: InventoryEmptyKind;
@@ -17,6 +17,7 @@ export function InventoryEmpty({ kind, zh, disabled, onRetry, onClear, onAdd }: 
     failed: { icon: CircleAlertIcon, title: t("无法加载技能", "Could not load skills"), description: null, action: t("重试", "Try again"), run: onRetry },
     uninstalled: { icon: BotIcon, title: t("此 Agent 未安装", "Agent not installed"), description: t("安装后可重新检测。", "Detect again after installation."), action: t("重新检测", "Detect again"), run: onRetry },
     filtered: { icon: SearchIcon, title: t("未找到匹配的技能", "No matching skills"), description: t("试试其他关键词，或清除筛选。", "Try another keyword or clear the filters."), action: t("清除筛选", "Clear filters"), run: onClear },
+    empty: { icon: PackagePlusIcon, title: t("暂无技能", "No skills yet"), description: null, action: t("添加技能", "Add skill"), run: onAdd },
     native: { icon: FolderOpenIcon, title: t("暂无原生技能", "No native skills yet"), description: t("Agent 自带及额外加载的技能会显示在这里。", "Skills bundled with or additionally loaded by the Agent appear here."), action: null, run: undefined },
     managed: { icon: PackagePlusIcon, title: t("添加你的第一个技能", "Add your first skill"), description: null, action: t("添加技能", "Add skill"), run: onAdd },
   }[kind];

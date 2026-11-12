@@ -1,23 +1,19 @@
 import { FolderSearchIcon, LayersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Choice } from '@/components/choice';
 import { displayHomePath } from '@/lib/upstream';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { dshNativePresetChoices, dshProfileLabel, dshDirectoryStatus, dshNativeContext, dshPresetText, type DshConfigurationFile, type DshPreset, type DshSnapshot } from '@/lib/dsh';
 
-export function DshNativeContextChoice({snapshot,home,disabled,zh,configuration,preset,onChange}:{snapshot:DshSnapshot;home:string;disabled:boolean;zh:boolean;configuration:string;preset:string;onChange:(configuration:string,preset:string)=>void}){
+export function dshNativeFilterOptions(snapshot:DshSnapshot,home:string,zh:boolean,configuration:string){
   const files=snapshot.configurationFiles??[];
   const presets=dshNativePresetChoices(snapshot.presets??[]).filter(row=>row.path===configuration);
   const label=(item:DshConfigurationFile)=>files.filter(other=>dshProfileLabel(other.profile)===dshProfileLabel(item.profile)).length>1?`${dshProfileLabel(item.profile)} · ${displayHomePath(item.path,home)}`:zh?`${dshProfileLabel(item.profile)} 配置`:`${dshProfileLabel(item.profile)} configuration`;
   const presetLabel=(row:typeof presets[number])=>{
     const name=dshPresetText(row,zh).name;
-    const duplicate=presets.some(other=>other.key!==row.key&&other.path===row.path&&dshPresetText(other,zh).name===name);
-    return duplicate?row.preset:name;
+    return presets.some(other=>other.key!==row.key&&other.path===row.path&&dshPresetText(other,zh).name===name)?row.preset:name;
   };
-  return <>
-    <Choice className="filter-trigger" label={zh?'筛选配置':'Filter configuration'} value={configuration} disabled={disabled} options={[{value:'all',label:zh?'全部配置':'All configurations'},...files.map(item=>({value:item.path,label:label(item)}))]} onChange={value=>onChange(value,'all')}/>
-    {configuration!=='all'&&<Choice className="filter-trigger" label={zh?'筛选预设':'Filter preset'} value={preset} disabled={disabled||!presets.length} options={[{value:'all',label:zh?'全部预设':'All presets'},...presets.map(row=>({value:row.key,label:presetLabel(row)}))]} onChange={value=>onChange(configuration,value)}/>}
-  </>;
+  return { configurations:[{value:'all',label:zh?'全部配置':'All configurations'},...files.map(item=>({value:item.path,label:label(item)}))],
+    presets:[{value:'all',label:zh?'全部预设':'All presets'},...presets.map(row=>({value:row.key,label:presetLabel(row)}))] };
 }
 
 export function DshNativeEmpty({snapshot,disabled,zh,onRefresh,unreadable,onOpenConfiguration}:{snapshot:DshSnapshot;disabled:boolean;zh:boolean;onRefresh:()=>void;unreadable?:DshPreset;onOpenConfiguration?:(path:string)=>void}){
