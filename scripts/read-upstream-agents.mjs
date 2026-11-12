@@ -12,7 +12,7 @@ export function readUpstreamAgents(code) {
     if (block.includes("isPositAssistantInstalled()")) paths.push({base:"home",path:".posit/assistant"},{base:"home",path:".positai"});
     if (block.includes("isKimchiInstalled()")) paths.push({ base: "home", path: ".config/kimchi" });
     if (block.includes("isZCodeInstalled()")) paths.push({ base: "home", path: ".zcode" }, { base: "absolute", path: "/Applications/ZCode.app" });
-    return { detectionPaths: paths, universalVisible: !block.includes("showInUniversalList: false"), detectionDependency: block.includes('packageJsonHasDependency(join(cwd, "package.json"), "eve")') ? "eve" : null };
+    return { detectionPaths: paths, universalVisible: !block.includes("showInUniversalList: false"), globalReadsCanonical: !block.includes("globalReadsCanonical: false"), detectionDependency: block.includes('packageJsonHasDependency(join(cwd, "package.json"), "eve")') ? "eve" : null };
   }
   const agents = [...table.matchAll(/name: "([^"]+)",\n\s*displayName: "([^"]+)",\n\s*skillsDir: "([^"]+)",\n\s*globalSkillsDir: ([^\n]+)/g)].map(([, id, name, projectPath, expression]) => {
     const globalExpression = expression.replace(/,$/, "");

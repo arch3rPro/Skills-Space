@@ -390,6 +390,7 @@ pub(super) fn inventory_documents(
         }
         let name = candidates.first().cloned().unwrap_or(folder.into());
         let hash = metadata.get(&doc.path).and_then(|d| d.hash.clone());
+        let legacy_hash = metadata.get(&doc.path).and_then(|d| d.legacy_hash.clone());
         metadata.insert(
             doc.path.clone(),
             DocumentMetadata {
@@ -398,6 +399,7 @@ pub(super) fn inventory_documents(
                 description: doc.description,
                 internal: false,
                 hash,
+                legacy_hash,
                 error: doc.error,
             },
         );
@@ -512,7 +514,7 @@ mod tests {
         (f, e, t, source)
     }
     #[test]
-    fn real_eve_mixed_install_transforms_each_slot_and_uninstall_removes_all_eve_copies_only() {
+    fn real_eve_mixed_install_preserves_transformed_slots_when_upstream_refuses_removal() {
         let (_f, e, t, source) = fixture();
         let project = t.directory(&e.home).unwrap();
         let mut op = addition(&source, t.clone(), false);
@@ -551,23 +553,24 @@ mod tests {
             "manual residual",
         )
         .unwrap();
-        let mut removal = Operation {
+        let removal = Operation {
             action: "remove".into(),
             agents: vec!["eve".into()],
             eve_subagents: Vec::new(),
             ..op
         };
-        let plan = removal_plan(&e, &removal, &inventory).unwrap();
-        assert_eq!(plan[0].paths.iter().filter(|p| p.selected).count(), 4);
-        removal.removals = Some(plan);
-        let result = apply(&e, &removal).unwrap();
-        assert_eq!(result.items[0].status, "complete", "{}", result.logs);
-        assert!(result
-            .inventory
-            .unwrap()
-            .skills
-            .iter()
-            .all(|s| !s.agents.contains(&"eve".into())));
+        let original_lock = fs::read(project.join("skills-lock.json")).unwrap();
+        let error = removal_plan(&e, &removal, &inventory).err().unwrap();
+        assert!(error.contains("cannot verify it as an unmodified installation"));
+        assert!(apply(&e, &removal).is_err());
+        assert_eq!(
+            fs::read(project.join("skills-lock.json")).unwrap(),
+            original_lock
+        );
+        assert_eq!(fs::read_to_string(root.join("SKILL.md")).unwrap(), text);
+        assert!(project
+            .join("agent/subagents/gamma/skills/fixture-skill/note.txt")
+            .is_file());
         assert!(project
             .join(".agents/skills/fixture-skill/SKILL.md")
             .is_file());

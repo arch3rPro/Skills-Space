@@ -49,7 +49,7 @@ pub(super) fn bundled_version(app: &AppHandle) -> Result<String, String> {
         .ok_or("Bundled CLI version is missing.".into())
 }
 
-const VERSION: &str = "1.7.4";
+const VERSION: &str = "1.8.1";
 
 fn resource_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let bundled = app
@@ -110,6 +110,7 @@ struct AgentDefinition {
     project_path: String,
     global_base: Option<String>,
     global_path: String,
+    global_reads_canonical: bool,
     detection_paths: Vec<DetectionPath>,
     detection_dependency: Option<String>,
     #[serde(default)]
@@ -363,6 +364,7 @@ impl Engine {
                 "AUTOHAND_HOME",
                 "GROK_HOME",
                 "SARVAM_HOME",
+                "REASONIX_HOME",
                 "XDG_CONFIG_HOME",
                 "XDG_STATE_HOME",
             ] {
@@ -432,6 +434,20 @@ impl Engine {
             run_process(&mut command)
         }
     }
+    fn reasonix_home(&self) -> PathBuf {
+        if !self.isolated {
+            if let Ok(path) = std::env::var("REASONIX_HOME") {
+                if !path.trim().is_empty() {
+                    return PathBuf::from(path.trim());
+                }
+            }
+        }
+        if cfg!(windows) {
+            self.env_home("APPDATA", "AppData/Roaming").join("reasonix")
+        } else {
+            self.home.join(".reasonix")
+        }
+    }
     fn agents(&self, target: &Target) -> Result<Vec<Agent>, String> {
         let directory = target.directory(&self.home)?;
         let definitions: Vec<AgentDefinition> = serde_json::from_slice(
@@ -457,6 +473,7 @@ impl Engine {
                     "autohandHome" => self.env_home("AUTOHAND_HOME", ".autohand"),
                     "grokHome" => self.env_home("GROK_HOME", ".grok"),
                     "sarvamHome" => self.env_home("SARVAM_HOME", ".sarvam"),
+                    "reasonixHome" => self.reasonix_home(),
                     "openclaw" => [".openclaw", ".clawdbot", ".moltbot"]
                         .iter()
                         .find(|part| self.home.join(part).exists())
@@ -465,13 +482,19 @@ impl Engine {
                     _ => return Err(format!("Unsupported upstream path base: {base}")),
                 };
                 // getAgentBaseDir overrides globalSkillsDir for universal Agents.
-                if agent.project_path == ".agents/skills" {
+                if agent.project_path == ".agents/skills" && agent.global_reads_canonical {
                     let legacy = base.join(&agent.global_path);
                     if legacy != self.home.join(".agents/skills") && legacy.is_dir() {
                         additional_paths.push(legacy.to_string_lossy().into_owned());
                     }
                     self.home.join(".agents/skills")
                 } else {
+                    if matches!(agent.id.as_str(), "antigravity" | "antigravity-cli") {
+                        let legacy = self.home.join(".gemini").join(&agent.id).join("skills");
+                        if legacy.is_dir() {
+                            additional_paths.push(legacy.to_string_lossy().into_owned());
+                        }
+                    }
                     base.join(&agent.global_path)
                 }
             };
@@ -494,6 +517,7 @@ impl Engine {
                     "autohandHome" => self.env_home("AUTOHAND_HOME", ".autohand"),
                     "grokHome" => self.env_home("GROK_HOME", ".grok"),
                     "sarvamHome" => self.env_home("SARVAM_HOME", ".sarvam"),
+                    "reasonixHome" => self.reasonix_home(),
                     "zedAppDataHome" if !self.isolated => match std::env::var_os("APPDATA") {
                         Some(value) => PathBuf::from(value),
                         None => return false,
@@ -547,7 +571,8 @@ impl Engine {
                     installation_evidence = Some(evidence);
                 }
             }
-            let shared_directory = agent.project_path == ".agents/skills";
+            let shared_directory = agent.project_path == ".agents/skills"
+                && (target.scope == "project" || agent.global_reads_canonical);
             result.push(Agent {
                 id: agent.id,
                 name: agent.name,
@@ -591,7 +616,15 @@ impl Engine {
         if !output.success {
             return Err(format!("Upstream list failed: {}", output.stderr));
         }
-        let listed: Vec<Skill> = serde_json::from_str(&output.stdout)
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&output.stdout)
+            .map_err(|e| format!("Unsupported upstream list response: {e}"))?;
+        // Missing rows are lock records, not installations. Restore and
+        // source removal already inspect the lock independently.
+        let listed: Vec<Skill> = rows
+            .into_iter()
+            .filter(|row| !(row["status"] == "missing" && row["path"].is_null()))
+            .map(serde_json::from_value)
+            .collect::<Result<_, _>>()
             .map_err(|e| format!("Unsupported upstream list response: {e}"))?;
         let mut agents = self.agents(target)?;
         let mut warnings = Vec::new();
@@ -699,8 +732,10 @@ impl Engine {
                         });
                     // Extra Hermes roots/categories are visible inventory, not CLI installation targets.
                     let cli_path = path.parent() == Some(Path::new(directory))
-                        && (!matches!(agent.id.as_str(), "hermes-agent" | "fx")
-                            || directory == &agent.path);
+                        && (!matches!(
+                            agent.id.as_str(),
+                            "hermes-agent" | "fx" | "antigravity" | "antigravity-cli"
+                        ) || directory == &agent.path);
                     if cli_path && !skill.cli_agents.contains(&agent.id) {
                         skill.cli_agents.push(agent.id.clone());
                     }
@@ -898,6 +933,8 @@ struct DocumentMetadata {
     #[serde(default)]
     internal: bool,
     hash: Option<String>,
+    #[serde(rename = "legacyHash")]
+    legacy_hash: Option<String>,
     error: Option<String>,
 }
 #[derive(Deserialize)]
@@ -966,10 +1003,13 @@ impl Engine {
             Ok(bytes) => {
                 let value: serde_json::Value = serde_json::from_slice(&bytes)
                     .map_err(|e| format!("Cannot inspect lockfile: {e}"))?;
-                if value
-                    .get("version")
-                    .is_some_and(|version| version != if target.scope == "global" { 3 } else { 1 })
-                {
+                if value.get("version").is_some_and(|version| {
+                    if target.scope == "global" {
+                        version != 3
+                    } else {
+                        !matches!(version.as_u64(), Some(1 | 2))
+                    }
+                }) {
                     return Err("Unsupported upstream lock schema version. Update checking was not started.".into());
                 }
                 Ok(value)
@@ -980,6 +1020,56 @@ impl Engine {
             Err(e) => Err(e.to_string()),
         }
     }
+}
+
+fn preserved_lock_entry(
+    engine: &Engine,
+    target: &Target,
+    before: &serde_json::Value,
+    after: &serde_json::Value,
+    name: &str,
+) -> bool {
+    let old = &before["skills"][name];
+    let new = &after["skills"][name];
+    if old == new {
+        return true;
+    }
+    if target.scope != "project" || before["version"] != 1 || after["version"] != 2 {
+        return false;
+    }
+    let (Some(old_fields), Some(new_fields)) = (old.as_object(), new.as_object()) else {
+        return false;
+    };
+    if !old_fields
+        .iter()
+        .filter(|(key, _)| *key != "computedHash")
+        .eq(new_fields.iter().filter(|(key, _)| *key != "computedHash"))
+    {
+        return false;
+    }
+    let folder = restoration::folder_name(name);
+    if folder.is_empty() {
+        return false;
+    }
+    let Ok(project) = target.directory(&engine.home) else {
+        return false;
+    };
+    let path = project.join(".agents/skills").join(folder);
+    let migrated = if path.join("SKILL.md").is_file() {
+        let path = path.to_string_lossy().into_owned();
+        engine
+            .documents(std::slice::from_ref(&path))
+            .ok()
+            .and_then(|mut documents| documents.remove(&path))
+            .filter(|doc| {
+                doc.legacy_hash.is_some()
+                    && doc.legacy_hash.as_deref() == old["computedHash"].as_str()
+            })
+            .and_then(|doc| doc.hash)
+    } else {
+        None
+    };
+    new["computedHash"].as_str() == Some(migrated.as_deref().unwrap_or(""))
 }
 
 #[derive(Serialize, Clone)]
@@ -1537,6 +1627,72 @@ pub struct RemovalReport {
     lock: String,
     unrelated_preserved: bool,
 }
+// The pinned CLI protects real project copies in ordinary repository
+// directories. Reject a reviewed removal it would skip before it can remove
+// another placement or drop the shared lock record.
+fn check_project_removal_copies(
+    engine: &Engine,
+    project: &Path,
+    lock: &serde_json::Value,
+    name: &str,
+    paths: &BTreeMap<String, RemovalPath>,
+) -> Result<(), String> {
+    let ordinary_copies = paths
+        .values()
+        .filter(|path| {
+            path.selected
+                && path.kind == "copy"
+                && Path::new(&path.path)
+                    .strip_prefix(project)
+                    .ok()
+                    .and_then(|relative| relative.components().next())
+                    .is_some_and(|part| !part.as_os_str().to_string_lossy().starts_with('.'))
+        })
+        .map(|path| path.path.clone())
+        .collect::<Vec<_>>();
+    if ordinary_copies.is_empty() {
+        return Ok(());
+    }
+    let entry = &lock["skills"][name];
+    let canonical = project
+        .join(".agents/skills")
+        .join(restoration::folder_name(name))
+        .to_string_lossy()
+        .into_owned();
+    let mut inspect = ordinary_copies.clone();
+    inspect.push(canonical.clone());
+    let documents = engine.documents(&inspect)?;
+    let expected = if lock["version"] == 1 {
+        documents
+            .get(&canonical)
+            .filter(|doc| {
+                doc.legacy_hash.is_some()
+                    && doc.legacy_hash.as_deref() == entry["computedHash"].as_str()
+            })
+            .and_then(|doc| doc.hash.as_deref())
+    } else {
+        entry["computedHash"]
+            .as_str()
+            .filter(|hash| !hash.is_empty())
+    };
+    let source = (entry["sourceType"] == "local")
+        .then(|| entry["source"].as_str())
+        .flatten()
+        .map(|source| project.join(source));
+    for path in ordinary_copies {
+        let copy = Path::new(&path);
+        if source
+            .as_ref()
+            .is_some_and(|source| copy.starts_with(source) || source.starts_with(copy))
+            || expected.is_none()
+            || documents.get(&path).and_then(|doc| doc.hash.as_deref()) != expected
+        {
+            return Err(format!("The current skills CLI keeps this project folder because it cannot verify it as an unmodified installation: {path}. Review the folder before removing it manually."));
+        }
+    }
+    Ok(())
+}
+
 fn removal_plan(
     engine: &Engine,
     operation: &Operation,
@@ -1719,6 +1875,15 @@ fn removal_plan(
         for path in paths.values_mut() {
             path.agents.sort();
             path.selected = path.agents.iter().any(|id| agents.contains(id));
+        }
+        if operation.target.scope == "project" {
+            check_project_removal_copies(
+                engine,
+                &operation.target.directory(&engine.home)?,
+                &lock,
+                name,
+                &paths,
+            )?;
         }
         let cleanup_possible = paths
             .values()
@@ -1924,10 +2089,13 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
             &initial,
         )?;
     }
-    let removals = if operation.action == "remove" {
-        removal_plan(engine, operation, &initial)?
+    let (removals, removal_lock) = if operation.action == "remove" {
+        (
+            removal_plan(engine, operation, &initial)?,
+            engine.lock(&operation.target)?,
+        )
     } else {
-        Vec::new()
+        (Vec::new(), serde_json::Value::Null)
     };
     if operation
         .removals
@@ -1990,7 +2158,7 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
     let mut expected = BTreeMap::new();
     let mut expected_plugins = BTreeMap::new();
     let mut expected_downloads = BTreeMap::new();
-    let mut direct_downloads = std::collections::BTreeSet::new();
+    let mut direct_downloads = BTreeMap::new();
     let mut provider_digests = BTreeMap::new();
     let plugin_lock_expected = operation.action == "add"
         && operation.target.scope == "global"
@@ -2037,8 +2205,15 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
             if let Some(digest) = &skill.download_digest {
                 provider_digests.insert(skill.name.clone(), digest.clone());
             }
-            if skill.download_url.is_some() && skill.download_source.is_none() {
-                direct_downloads.insert(skill.name.clone());
+            if let Some(url) = skill
+                .download_url
+                .as_deref()
+                .filter(|_| skill.download_source.is_none())
+            {
+                direct_downloads.insert(
+                    skill.name.clone(),
+                    (url.to_owned(), skill.fingerprint.clone()),
+                );
             }
             if let (Some(url), Some(hash), Some(source)) = (
                 &skill.download_url,
@@ -2096,9 +2271,17 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
             .skills
             .retain(|name| update_snapshots.get(name).is_some_and(Result::is_ok));
     }
-    // Submit all eligible names once; the unmodified CLI owns its update scheduling.
+    // With no detected Agent, upstream update installs to every supported Agent.
+    // Keep the existing confirmed installations as the targets in that case.
+    let update_has_detected_agent = update_before.as_ref().is_some_and(|inventory| {
+        inventory
+            .agents
+            .iter()
+            .any(|agent| agent.detected && agent.id != dsh::ID)
+    });
     let batch = if operation.action == "add"
         || operation.action == "update"
+            && update_has_detected_agent
             && !batch_operation.skills.is_empty()
             && !skill_sync::has_relations(engine, &operation.skills)?
     {
@@ -2231,10 +2414,29 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
             .collect();
         let mut single = operation.clone();
         single.skills = vec![name.clone()];
-        let removal = removals.iter().find(|plan| &plan.skill == name);
-        if let Some(plan) = removal {
-            let current = removal_plan(engine, &single, &before)?;
-            if current.first() != Some(plan) {
+        let before_lock = match &batch {
+            Some(batch) => batch.lock.clone(),
+            None => engine.lock(&single.target)?,
+        };
+        let removal = if let Some(plan) = removals.iter().find(|plan| &plan.skill == name) {
+            let current = removal_plan(engine, &single, &before)?.into_iter().next();
+            let reviewed = current.as_ref().is_some_and(|current| {
+                if current == plan {
+                    return true;
+                }
+                let mut original = current.clone();
+                original.lock_record = plan.lock_record.clone();
+                original == *plan
+                    && current.lock_record == before_lock["skills"][name]
+                    && preserved_lock_entry(
+                        engine,
+                        &single.target,
+                        &removal_lock,
+                        &before_lock,
+                        name,
+                    )
+            });
+            if !reviewed {
                 items.push(ItemResult {
                     skill: name.clone(),
                     status: "failed".into(),
@@ -2248,10 +2450,9 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
                 continue;
             }
             single.agents = plan.agents.clone();
-        }
-        let before_lock = match &batch {
-            Some(batch) => batch.lock.clone(),
-            None => engine.lock(&single.target)?,
+            current
+        } else {
+            None
         };
         let has_eve = single.agents.iter().any(|id| id == "eve")
             || before
@@ -2312,7 +2513,7 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
                                     .filter(|id| !operation.agents.contains(id))
                                     .all(matches)
                             });
-                        if let Some(plan) = removal {
+                        if let Some(plan) = &removal {
                             removal_details = Some(removal_report(
                                 engine,
                                 &operation.target,
@@ -2331,8 +2532,14 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
                                                     .filter(|(key, _)| {
                                                         !operation.skills.contains(key)
                                                     })
-                                                    .all(|(key, value)| {
-                                                        lock["skills"][key] == *value
+                                                    .all(|(key, _)| {
+                                                        preserved_lock_entry(
+                                                            engine,
+                                                            &operation.target,
+                                                            &batch.lock,
+                                                            &lock,
+                                                            key,
+                                                        )
                                                     })
                                             })
                                         })
@@ -2343,10 +2550,20 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
                                                 == Some(digest)
                                         })
                                     })
-                                    && (!direct_downloads.contains(name)
-                                        || engine
-                                            .lock(&single.target)
-                                            .is_ok_and(|lock| lock == before_lock))
+                                    && direct_downloads.get(name).is_none_or(|(url, hash)| {
+                                        engine.lock(&single.target).is_ok_and(|lock| {
+                                            let entry = &lock["skills"][name];
+                                            let key = if single.target.scope == "global" {
+                                                "skillFolderHash"
+                                            } else {
+                                                "computedHash"
+                                            };
+                                            entry["sourceType"] == "download"
+                                                && entry["sourceUrl"] == url.as_str()
+                                                && hash.is_some()
+                                                && entry[key].as_str() == hash.as_deref()
+                                        })
+                                    })
                                     && expected_downloads.get(name).is_none_or(
                                         |(url, hash, source)| {
                                             provider::lock_matches(
@@ -2501,7 +2718,7 @@ fn apply_unlocked(engine: &Engine, operation: &Operation) -> Result<OperationRes
             }
         };
         if removal_details.is_none() {
-            if let Some(plan) = removal {
+            if let Some(plan) = &removal {
                 removal_details = Some(removal_report(engine, &operation.target, plan, false));
             }
         }
@@ -2763,6 +2980,9 @@ fn source_snapshot_from_entry(
         .hash
         .clone()
         .ok_or("Source exceeds verification limits.")?];
+    if let Some(legacy) = &metadata.legacy_hash {
+        hashes.push(legacy.clone());
+    }
     if target.scope == "global" && entry["sourceType"] == "github" {
         let relative = folder
             .strip_prefix(&root)

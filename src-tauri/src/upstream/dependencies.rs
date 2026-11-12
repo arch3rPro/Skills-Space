@@ -110,7 +110,7 @@ fn local_lock(
     let path = project.join("skills-lock.json");
     match fs::symlink_metadata(&path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok((None, serde_json::json!({"version":1,"skills":{}})))
+            return Ok((None, serde_json::json!({"version":2,"skills":{}})))
         }
         Err(e) => return Err(e.to_string()),
         Ok(m) if !m.is_file() || m.len() > 1024 * 1024 => {
@@ -121,12 +121,13 @@ fn local_lock(
     let bytes = fs::read(&path).map_err(|e| e.to_string())?;
     let lock: serde_json::Value =
         serde_json::from_slice(&bytes).map_err(|e| format!("Invalid skills-lock.json: {e}"))?;
-    if lock["version"] != 1
+    if !matches!(lock["version"].as_u64(), Some(1 | 2))
         || !lock["skills"].is_object()
         || lock["skills"].as_object().is_some_and(|s| s.len() > 200)
     {
         return Err(
-            "Dependency installation requires a version 1 lock with at most 200 records.".into(),
+            "Dependency installation requires a version 1 or 2 lock with at most 200 records."
+                .into(),
         );
     }
     let hash = file_hash(engine, &path)?;
@@ -704,7 +705,11 @@ fn install(engine: &Engine, confirmed: &DependencyPlan) -> Result<DependencyResu
                 .into(),
         );
     }
-    let mut args = vec!["experimental_sync".into(), "--yes".into()];
+    let mut args = vec![
+        "experimental_sync".into(),
+        "--yes".into(),
+        "--no-frozen-lockfile".into(),
+    ];
     if confirmed.options.copy {
         args.push("--copy".into());
     }
@@ -801,12 +806,18 @@ fn install(engine: &Engine, confirmed: &DependencyPlan) -> Result<DependencyResu
         .collect();
     let old = prepared.lock["skills"].as_object().unwrap();
     if let Some(new) = after_lock.as_ref().and_then(|l| l["skills"].as_object()) {
-        if old
-            .iter()
-            .any(|(n, e)| !planned.contains(n.as_str()) && new.get(n) != Some(e))
-            || new
-                .keys()
-                .any(|n| !planned.contains(n.as_str()) && !old.contains_key(n))
+        if old.iter().any(|(n, _)| {
+            !planned.contains(n.as_str())
+                && !preserved_lock_entry(
+                    engine,
+                    &confirmed.target,
+                    &prepared.lock,
+                    after_lock.as_ref().unwrap(),
+                    n,
+                )
+        }) || new
+            .keys()
+            .any(|n| !planned.contains(n.as_str()) && !old.contains_key(n))
         {
             warnings.push("Unplanned lock records changed.".into());
         }
@@ -834,7 +845,13 @@ fn install(engine: &Engine, confirmed: &DependencyPlan) -> Result<DependencyResu
     for item in &confirmed.items {
         let lock_matches = after_lock.as_ref().is_some_and(|l| {
             if item.cached {
-                return l["skills"][&item.skill] == prepared.lock["skills"][&item.skill];
+                return preserved_lock_entry(
+                    engine,
+                    &confirmed.target,
+                    &prepared.lock,
+                    l,
+                    &item.skill,
+                );
             }
             l["skills"][&item.skill]["sourceType"] == item.source_type
                 && l["skills"][&item.skill]["source"] == item.package
@@ -1242,7 +1259,7 @@ mod tests {
         assert_eq!(fs::read_to_string(eve.join("SKILL.md")).unwrap(), content);
     }
     #[test]
-    fn pinned174_direct_optional_peer_npm_declarations_and_no_unreviewed_cleanup() {
+    fn declared_dependencies_preserve_unselected_content_during_v1_migration() {
         let (_f, e, t) = fixture();
         let p = t.directory(&e.home).unwrap();
         for (package, name, subpath) in [
@@ -1276,10 +1293,7 @@ mod tests {
             fs::read(p.join(".agents/skills/stale/SKILL.md")).unwrap(),
             stale
         );
-        assert_eq!(
-            e.lock(&t).unwrap()["skills"]["stale"]["computedHash"],
-            "old"
-        );
+        assert_eq!(e.lock(&t).unwrap()["skills"]["stale"]["computedHash"], "");
         assert_eq!(e.lock(&t).unwrap()["skills"].as_object().unwrap().len(), 5);
         assert!(!p.join(".agents/skills/unselected-skill").exists());
     }

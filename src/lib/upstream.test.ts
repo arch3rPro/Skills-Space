@@ -172,8 +172,15 @@ test("inventory sections separate native origins without treating unknown source
   assert.equal(agentSkillOrigin({...base,piState:state}),"directory");
   const pkg={...base,piState:{...state,origin:"package",packageIndex:0,packageSource:"npm:example"}};
   assert.equal(skillCollection(pkg),"agent");assert.equal(agentSkillOrigin(pkg),"package");
+  assert.equal(skillCollection(pkg,"pi"),"agent");
+  const sharedWithDsh={...pkg,agents:["pi","deepseek-harness"]};
+  assert.equal(skillCollection(sharedWithDsh,"deepseek-harness"),"managed","one Agent's native source must not change another Agent's action ownership");
+  assert.equal(agentSkillOrigin(sharedWithDsh,"deepseek-harness"),null);
   assert.equal(skillCollection({...base,piState:{...state,origin:"configured",cliAddressable:true}}),"agent");
   assert.equal(skillCollection({...base,piState:{...state,cliAddressable:true}}),"managed","standard shared CLI target is not a builtin");
+  const dshShared={...base,agents:["deepseek-harness","pi"],shared:true,dshState:{file:"/shared/SKILL.md",source:"user-agents",shadowed:false,cliAddressable:true,configured:true,reason:null,modelInvocable:true,userInvocable:true}};
+  assert.equal(skillCollection(dshShared,"deepseek-harness"),"agent","an untracked shared file must not gain CLI uninstall from discovery alone");
+  assert.equal(skillCollection({...dshShared,cliManaged:true},"deepseek-harness"),"managed","a recorded CLI installation keeps its lifecycle owner");
   assert.equal(skillCollection({...pkg,cliManaged:true}),"managed","one recorded physical installation belongs to only one page");
   assert.equal(skillCollection(base),"managed");assert.equal(agentSkillOrigin(base),null);
   assert.equal(skillCollection({...base,sourceType:"download"}),"managed","upstream downloads need no source lock");

@@ -2,13 +2,10 @@
 import { readFile, stat } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { parse, stringify } from "./skills/node_modules/yaml/dist/index.js";
-const code = await readFile(new URL("./skills/dist/cli.mjs", import.meta.url), "utf8");
-const block = (start, end) => {
-  const a = code.indexOf(start), b = code.indexOf(end, a);
-  if (a < 0 || b < a) throw new Error("Review pinned Eve formatter boundaries.");
-  return code.slice(a,b);
-};
-const functions = block("function parseFrontmatter(raw) {", "function isContainedIn(") + block("function stripIgnoredEveFrontmatter(raw) {", "async function copyDirectory(");
+import { readUpstream } from "./upstream-readonly.mjs";
+const { block } = await readUpstream();
+const functions = block("function parseFrontmatter(raw) {", "function isContainedIn(")
+  + block("function stripIgnoredEveFrontmatter(raw) {", "function isWithinRoot(");
 const input = JSON.parse(process.argv[3]);
 if (!Array.isArray(input) || input.length > 2000) throw new Error("Eve inspection exceeds limits.");
 if (process.argv[2] === "transform") {

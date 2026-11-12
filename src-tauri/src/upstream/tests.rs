@@ -983,15 +983,23 @@ fn zero_exit_noop_does_not_verify_install_or_removal() {
         resources.join("inspect-upstream-discovery.mjs"),
     )
     .unwrap();
-    fs::create_dir_all(resources.join("skills/dist")).unwrap();
     fs::copy(
-        engine.resources.join("skills/dist/cli.mjs"),
-        resources.join("skills/dist/cli.mjs"),
+        engine.resources.join("upstream-readonly.mjs"),
+        resources.join("upstream-readonly.mjs"),
     )
     .unwrap();
     copy_directory(
-        &engine.resources.join("skills/node_modules/yaml"),
-        &resources.join("skills/node_modules/yaml"),
+        &engine.resources.join("skills/dist"),
+        &resources.join("skills/dist"),
+    );
+    fs::copy(
+        engine.resources.join("skills/package.json"),
+        resources.join("skills/package.json"),
+    )
+    .unwrap();
+    copy_directory(
+        &engine.resources.join("skills/node_modules"),
+        &resources.join("skills/node_modules"),
     );
     engine.resources = resources;
     let original = fixture.0.join(".claude/skills/fixture-skill");

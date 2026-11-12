@@ -1,9 +1,10 @@
 // Read-only original discovery: no CLI entry, repository scripts or mutation APIs.
 import * as fs from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, normalize, posix, relative, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { readProjectLock, readUpstream } from './upstream-readonly.mjs';
 
 try {
   const packagePath = process.argv[6] || fileURLToPath(new URL('./skills/package.json', import.meta.url));
@@ -12,12 +13,9 @@ try {
   const search = await fs.realpath(process.argv[3]);
   const includeInternal = process.argv[4] === 'true';
   const filter = process.argv[5] || null;
-  const code = await fs.readFile(join(dirname(packagePath), 'dist/cli.mjs'), 'utf8');
-  function block(start, end) {
-    const a = code.indexOf(start), b = code.indexOf(end, a);
-    if (a < 0 || b < a) throw Error('Review pinned discovery boundaries.');
-    return code.slice(a, b);
-  }
+  const upstream = await readUpstream(packagePath);
+  const { diagnostics, isDiagnostic } = upstream;
+  const agents = JSON.parse(await fs.readFile(new URL('./agents.json', import.meta.url), 'utf8'));
   let failure = null, count = 0, bytes = 0;
   const warnings = [];
   async function checked(path) {
@@ -43,24 +41,25 @@ try {
       }
     };
   }
+  const readFile = bounded(async path => {
+    path = await checked(path);
+    const limit = basename(path) === 'SKILL.md' ? 256 * 1024 : 1024 * 1024;
+    const info = await fs.stat(path);
+    if (!info.isFile() || info.size > limit) throw Error('Source file exceeds preview limits.');
+    const data = await fs.readFile(path, 'utf8');
+    bytes += Buffer.byteLength(data);
+    if (Buffer.byteLength(data) > limit || bytes > 16 * 1024 * 1024) throw Error('Source exceeds preview limits.');
+    return data;
+  });
   const original = runInNewContext(
-    block('const CSI_RE =', 'const silentOutput =')
-      + block('function parseFrontmatter(raw) {', 'const home = homedir();')
-      + '\n({discoverSkills,filterSkills});', {
-      basename, dirname, isAbsolute, join, normalize, relative, resolve, sep, parse,
+    upstream.metadata() + upstream.discovery() + '\n({discoverSkills,filterSkills});', {
+      basename, dirname, isAbsolute, join, normalize, posix, relative, resolve, sep, parse,
+      agents: agents.map(({ projectPath }) => ({ skillsDir: projectPath })),
+      diagnostics, isDiagnostic, readFile,
+      readLocalLock: directory => readProjectLock(directory, readFile, diagnostics),
       process: {env: {}, cwd: () => root},
-      console: {warn: warning => { if (warnings.length < 200) warnings.push(String(warning)); }},
+      warn: warning => { if (warnings.length < 200) warnings.push(warning.message); },
       stat: bounded(async path => fs.stat(await checked(path))),
-      readFile: bounded(async path => {
-        path = await checked(path);
-        const limit = basename(path) === 'SKILL.md' ? 256 * 1024 : 1024 * 1024;
-        const info = await fs.stat(path);
-        if (!info.isFile() || info.size > limit) throw Error('Source file exceeds preview limits.');
-        const data = await fs.readFile(path, 'utf8');
-        bytes += Buffer.byteLength(data);
-        if (Buffer.byteLength(data) > limit || bytes > 16 * 1024 * 1024) throw Error('Source exceeds preview limits.');
-        return data;
-      }),
       readdir: bounded(async (path, options) => {
         const entries = await fs.readdir(await checked(path), options);
         count += entries.length;

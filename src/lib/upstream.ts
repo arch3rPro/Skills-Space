@@ -55,7 +55,7 @@ export type SkillCollection = "managed" | "agent";
 // Management surface, not proof of who originally copied a skill. Untracked standard
 // CLI targets (including downloads without locks) keep their existing lifecycle.
 export function skillCollection(skill: InstalledSkill, agent?: string): SkillCollection {
-  if (agent === "codex" && skill.codexState) return isNativeSkillForAgent(skill, agent) ? "agent" : "managed";
+  if (agent) return isNativeSkillForAgent(skill, agent) ? "agent" : "managed";
   return ["hermes-agent", "pi", "deepseek-harness", "fx", "codex"].some(agent => isNativeSkillForAgent(skill, agent)) ? "agent" : "managed";
 }
 
@@ -66,12 +66,16 @@ export function isNativeSkillForAgent(skill: InstalledSkill, agent: string): boo
   if (skill.cliManaged) return false;
   if (agent === "hermes-agent") return !!skill.hermesOrigin && (skill.hermesOrigin !== "local" || !skill.cliAgents?.includes(agent));
   if (agent === "pi") return !!skill.piState && (skill.piState.managed === undefined ? skill.piState.origin !== "directory" || !skill.piState.cliAddressable : !skill.piState.managed);
-  if (agent === "deepseek-harness") return !!skill.dshState && !skill.dshState.cliAddressable;
+  if (agent === "deepseek-harness") return !!skill.dshState && (!skill.dshState.cliAddressable || !!skill.shared);
   return false;
 }
 
-export function agentSkillOrigin(skill: InstalledSkill): "builtin" | "package" | "directory" | null {
-  if(skillCollection(skill)!=="agent")return null;
+export function agentSkillOrigin(skill: InstalledSkill, agent?: string): "builtin" | "package" | "directory" | null {
+  if(skillCollection(skill,agent)!=="agent")return null;
+  if(agent==="codex")return skill.codexState?.origin === "system" || skill.codexState?.origin === "admin" ? "builtin" : skill.codexState?.pluginId ? "package" : "directory";
+  if(agent==="hermes-agent")return skill.hermesOrigin === "builtin" ? "builtin" : "directory";
+  if(agent==="pi")return skill.piState?.origin === "package" ? "package" : "directory";
+  if(agent==="deepseek-harness")return skill.dshState?.source === "bundled" ? "builtin" : "directory";
   if(skill.codexState?.origin === "system" || skill.codexState?.origin === "admin")return "builtin";
   if(skill.codexState?.pluginId)return "package";
   if(skill.hermesOrigin === "builtin")return "builtin";

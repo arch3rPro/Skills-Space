@@ -122,8 +122,11 @@ fn read_lock_with_empty(
     let skills = value["skills"]
         .as_object()
         .ok_or("skills-lock.json must contain a skills object.")?;
-    if value["version"] != 1 || !allow_empty && skills.is_empty() || skills.len() > 200 {
-        return Err("Restore requires a version 1 lock containing 1–200 skills.".into());
+    if !matches!(value["version"].as_u64(), Some(1 | 2))
+        || !allow_empty && skills.is_empty()
+        || skills.len() > 200
+    {
+        return Err("Restore requires a version 1 or 2 lock containing 1–200 skills.".into());
     }
     Ok((bytes, value))
 }
@@ -174,7 +177,7 @@ pub(super) fn observe(engine: &Engine, path: &Path) -> RestorePath {
                 out.hash = engine
                     .documents(std::slice::from_ref(&out.path))
                     .ok()
-                    .and_then(|d| d.get(&out.path).and_then(|doc| doc.hash.clone()));
+                    .and_then(|d| d.get(&out.path).and_then(|doc| doc.legacy_hash.clone()));
             }
         }
         _ => {}
@@ -233,7 +236,7 @@ pub(super) fn observations(
     for batch in directories.chunks(100) {
         if let Ok(docs) = engine.documents(batch) {
             for (path, doc) in docs {
-                hashes.insert(path, doc.hash);
+                hashes.insert(path, doc.legacy_hash);
             }
         }
     }
@@ -353,6 +356,22 @@ fn entry_snapshot(
         .as_str()
         .or_else(|| entry["source"].as_str())
         .ok_or("Source is unknown.")?;
+    if entry["sourceType"] == "download" {
+        let url = entry["sourceUrl"].as_str().ok_or("Missing download URL.")?;
+        let preview = downloads::inspect(engine, url, url, false)?;
+        let skill = preview
+            .skills
+            .into_iter()
+            .find(|skill| skill.name == name)
+            .ok_or("Recorded download skill is missing or renamed.")?;
+        return Ok(SourceSnapshot {
+            internal: skill.internal,
+            signature: skill.signature,
+            hashes: vec![skill
+                .fingerprint
+                .ok_or("Download exceeds verification limits.")?],
+        });
+    }
     if matches!(entry["sourceType"].as_str(), Some("git" | "gitlab"))
         && entry["sourceUrl"].as_str().is_none()
         && !source.contains(':')
@@ -770,6 +789,9 @@ fn restore(engine: &Engine, confirmed: &RestorePlan) -> Result<RestoreResult, St
     let before_lock = engine.lock(&confirmed.target)?;
     let args = vec![
         "experimental_install".into(),
+        "--agent".into(),
+        "universal".into(),
+        "--no-frozen-lockfile".into(),
         "--copy".into(),
         "--no-cleanup".into(),
         "--no-remote".into(),
@@ -830,8 +852,9 @@ fn restore(engine: &Engine, confirmed: &RestorePlan) -> Result<RestoreResult, St
             .ok_or("Cannot inspect previous lock records.")?;
         let new = after["skills"].as_object();
         if new.is_none()
-            || old.iter().any(|(n, e)| {
-                !planned.contains(n.as_str()) && new.and_then(|m| m.get(n)) != Some(e)
+            || old.keys().any(|n| {
+                !planned.contains(n.as_str())
+                    && !preserved_lock_entry(engine, &confirmed.target, &before_lock, after, n)
             })
             || new.is_some_and(|m| {
                 m.keys()
@@ -991,6 +1014,189 @@ mod tests {
         }
         let out = engine.cli(&args, t).unwrap();
         assert!(out.success, "{} {}", out.stdout, out.stderr);
+    }
+    #[test]
+    #[ignore = "Requires SKILLS_SPACE_TEST_OLD_CLI pointing to original 1.7.4"]
+    fn upgrade_paths_and_mixed_project_lock_through_desktop_lifecycle() {
+        let fixture = TemporaryDirectory::new().unwrap();
+        let home = fixture.0.join("home");
+        let project = fixture.0.join("project");
+        let repo = fixture.0.join("source.git");
+        fs::create_dir_all(&home).unwrap();
+        fs::create_dir_all(project.join(".claude")).unwrap();
+        let deep = repo.join("catalog/team/tools/shared/extra/skills/declared");
+        source(&repo.join("skills/legacy"), "legacy", "original");
+        source(&repo.join("skills/mixed"), "mixed", "same content");
+        source(&deep, "declared", "Version 1");
+        fs::write(
+            repo.join("skills.sh.json"),
+            r#"{"paths":["./catalog/team/tools/shared/extra/skills","../outside"]}"#,
+        )
+        .unwrap();
+        let engine = engine(&home);
+        let scope = target(&project);
+        git(&engine, &repo, &["init", "-q", "-b", "main"]);
+        commit(&engine, &repo);
+        let url = reqwest::Url::from_file_path(&repo).unwrap().to_string();
+        let old = std::env::var("SKILLS_SPACE_TEST_OLD_CLI").unwrap();
+        let old_run = |cwd: &Path, args: &[&str]| {
+            let result =
+                run_process(engine.command(&engine.node, cwd).arg(&old).args(args)).unwrap();
+            assert!(result.success, "{} {}", result.stdout, result.stderr);
+            result.stdout
+        };
+        assert_eq!(old_run(&project, &["--version"]).trim(), "1.7.4");
+        old_run(
+            &project,
+            &[
+                "add",
+                &url,
+                "--skill",
+                "legacy",
+                "--agent",
+                "universal",
+                "--yes",
+            ],
+        );
+        let lock_path = project.join("skills-lock.json");
+        let original_lock = fs::read(&lock_path).unwrap();
+        assert_eq!(engine.lock(&scope).unwrap()["version"], 1);
+        assert_eq!(check_updates(&engine, &scope).unwrap()[0].status, "current");
+        assert_eq!(fs::read(&lock_path).unwrap(), original_lock);
+
+        let preview = inspect(&engine, &url).unwrap();
+        assert!(preview.skills.iter().any(|skill| skill.name == "declared"));
+        let mut operation = crate::upstream::tests::addition(Path::new(&url), scope.clone(), true);
+        operation.skills = vec!["declared".into()];
+        operation.source_hashes = Some(
+            preview
+                .skills
+                .into_iter()
+                .map(|skill| (skill.name, skill.selection_fingerprint))
+                .collect(),
+        );
+        let result = apply(&engine, &operation).unwrap();
+        assert_eq!(result.items[0].status, "complete", "{}", result.logs);
+        assert_eq!(engine.lock(&scope).unwrap()["version"], 2);
+        assert_eq!(
+            fs::read(project.join(".agents/skills/declared/SKILL.md")).unwrap(),
+            fs::read(deep.join("SKILL.md")).unwrap(),
+        );
+
+        old_run(
+            &project,
+            &[
+                "add",
+                &url,
+                "--skill",
+                "mixed",
+                "--agent",
+                "universal",
+                "--yes",
+            ],
+        );
+        assert_eq!(engine.lock(&scope).unwrap()["version"], 2);
+        let unchanged = check_updates(&engine, &scope).unwrap();
+        assert_eq!(unchanged.len(), 3);
+        assert!(unchanged.iter().all(|skill| skill.status == "current"));
+
+        source(&deep, "declared", "Version 2");
+        commit(&engine, &repo);
+        let changed = check_updates(&engine, &scope).unwrap();
+        assert_eq!(
+            changed
+                .iter()
+                .find(|skill| skill.skill == "declared")
+                .unwrap()
+                .status,
+            "available"
+        );
+        operation.action = "update".into();
+        operation.source = None;
+        operation.source_hashes = None;
+        operation.agents.clear();
+        let result = apply(&engine, &operation).unwrap();
+        assert_eq!(result.items[0].status, "complete", "{}", result.logs);
+        let installed = project.join(".agents/skills/declared");
+        assert!(fs::read_to_string(installed.join("SKILL.md"))
+            .unwrap()
+            .contains("Version 2"));
+
+        fs::remove_dir_all(&installed).unwrap();
+        let before_restore = fs::read(&lock_path).unwrap();
+        let inventory = engine.inventory(&scope).unwrap();
+        assert!(inventory.skills.iter().any(|skill| skill.name == "mixed"));
+        let plan = prepare(&engine, &scope).unwrap().plan;
+        assert_eq!(fs::read(&lock_path).unwrap(), before_restore);
+        let restored = restore(&engine, &plan).unwrap();
+        assert!(
+            restored.items.iter().all(|item| item.status == "complete"),
+            "{} {:?}",
+            restored.logs,
+            restored.warnings
+        );
+        assert!(fs::read_to_string(installed.join("SKILL.md"))
+            .unwrap()
+            .contains("Version 2"));
+        assert_eq!(
+            engine.lock(&scope).unwrap()["skills"]["declared"]["installMode"],
+            "copy"
+        );
+
+        operation.action = "remove".into();
+        operation.agents = vec!["codex".into(), "claude-code".into()];
+        let result = apply(&engine, &operation).unwrap();
+        assert_eq!(
+            result.items[0].status,
+            "complete",
+            "{} {}",
+            result.logs,
+            serde_json::to_string(&result.items[0]).unwrap(),
+        );
+        assert!(!installed.exists());
+        assert!(engine.lock(&scope).unwrap()["skills"]["declared"].is_null());
+        assert!(project.join(".agents/skills/legacy/SKILL.md").is_file());
+        assert!(project.join(".agents/skills/mixed/SKILL.md").is_file());
+
+        let legacy_project = fixture.0.join("legacy-project");
+        fs::create_dir(&legacy_project).unwrap();
+        old_run(
+            &legacy_project,
+            &[
+                "add",
+                &url,
+                "--skill",
+                "legacy",
+                "mixed",
+                "--agent",
+                "universal",
+                "--yes",
+            ],
+        );
+        let legacy_scope = target(&legacy_project);
+        assert_eq!(engine.lock(&legacy_scope).unwrap()["version"], 1);
+        operation.target = legacy_scope.clone();
+        operation.skills = vec!["legacy".into(), "mixed".into()];
+        operation.agents = vec!["codex".into()];
+        operation.removals = Some(
+            removal_plan(
+                &engine,
+                &operation,
+                &engine.inventory(&legacy_scope).unwrap(),
+            )
+            .unwrap(),
+        );
+        let removed = apply(&engine, &operation).unwrap();
+        assert!(
+            removed.items.iter().all(|item| item.status == "complete"),
+            "{}",
+            serde_json::to_string(&removed.items).unwrap()
+        );
+        let lock = engine.lock(&legacy_scope).unwrap();
+        assert_eq!(lock["version"], 2);
+        assert!(lock["skills"].as_object().unwrap().is_empty());
+        assert!(!legacy_project.join(".agents/skills/legacy").exists());
+        assert!(!legacy_project.join(".agents/skills/mixed").exists());
     }
     #[test]
     fn reviewed_reinstall_rechecks_local_edits_and_retries_without_full_inventory_prepare() {
@@ -1318,7 +1524,7 @@ mod tests {
         assert!(prepare(&engine, &t).is_err());
         for value in [
             "{",
-            "{\"version\":2,\"skills\":{\"x\":{}}}",
+            "{\"version\":3,\"skills\":{\"x\":{}}}",
             "{\"version\":1,\"skills\":{}}",
         ] {
             fs::write(project.join("skills-lock.json"), value).unwrap();

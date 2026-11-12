@@ -52,7 +52,7 @@ pub(super) fn inspect(
             count / 2
         });
     }
-    inspection.warnings.push("Direct downloads do not create upstream source locks. Keep the download URL to preview and install again; automatic updates and Eve targets are unavailable. Existing same-name source records are retained, not replaced by this URL.".into());
+    inspection.warnings.push("The download URL is recorded as the skill source. Preview it again to reinstall newer content. Eve targets are unavailable for downloads.".into());
     Ok(inspection)
 }
 
@@ -64,7 +64,7 @@ mod tests {
         tests::{addition, engine, global},
     };
     #[test]
-    fn original_direct_markdown_zip_and_tar_lifecycle_preserves_sources_and_has_no_locks() {
+    fn original_direct_markdown_zip_and_tar_lifecycle_records_source() {
         let f = TemporaryDirectory::new().unwrap();
         let home = f.0.join("home");
         fs::create_dir_all(home.join(".codex")).unwrap();
@@ -107,7 +107,9 @@ mod tests {
             );
             let result = apply(&e, &op).unwrap();
             assert_eq!(result.items[0].status, "complete", "{}", result.logs);
-            assert!(e.lock(&target).unwrap()["skills"][&name].is_null());
+            let lock = e.lock(&target).unwrap();
+            assert_eq!(lock["skills"][&name]["sourceType"], "download");
+            assert_eq!(lock["skills"][&name]["sourceUrl"], url);
             if kind != "md" {
                 assert_eq!(
                     fs::read(

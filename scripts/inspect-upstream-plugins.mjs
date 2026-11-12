@@ -3,11 +3,10 @@ import { readFile, lstat, realpath } from "node:fs/promises";
 import { dirname, join, normalize, resolve, sep } from "node:path";
 import { runInNewContext } from "node:vm";
 
+import { readUpstream } from "./upstream-readonly.mjs";
+
 const root = await realpath(process.argv[2]);
-const code = await readFile(new URL("./skills/dist/cli.mjs", import.meta.url), "utf8");
-const start = code.indexOf("function isContainedIn(targetPath, basePath) {");
-const end = code.indexOf('const LOCAL_LOCK_FILE =', start);
-if (start < 0 || end < start) throw new Error("Review pinned plugin discovery boundaries.");
+const { block } = await readUpstream();
 const contents = new Map();
 for (const name of ["marketplace.json", "plugin.json"]) {
   const file = join(root, ".claude-plugin", name);
@@ -32,7 +31,7 @@ for (const name of ["marketplace.json", "plugin.json"]) {
     if (error.code !== "ENOENT") throw error;
   }
 }
-const original = runInNewContext(code.slice(start, end) + "\n({getPluginSkillPaths,getPluginGroupings})", {
+const original = runInNewContext(block("function isContainedIn(", "const SKILLS_SH_CONFIG_FILE =") + "\n({getPluginSkillPaths,getPluginGroupings})", {
   dirname, join, normalize, resolve, sep,
   readFile: async (file) => {
     if (!contents.has(file)) throw new Error("No manifest.");

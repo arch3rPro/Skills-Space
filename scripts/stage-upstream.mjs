@@ -2,12 +2,13 @@ import { copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } 
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { upstreamChunk } from "./upstream-readonly.mjs";
 import { readUpstreamAgents } from "./read-upstream-agents.mjs";
 
 const require = createRequire(import.meta.url);
 const source = dirname(require.resolve("skills/package.json"));
 const metadata = JSON.parse(readFileSync(`${source}/package.json`, "utf8"));
-if (metadata.version !== "1.7.4") throw new Error("Review the upstream contract before changing skills@1.7.4.");
+if (metadata.version !== "1.8.1") throw new Error("Review the upstream contract before changing skills@1.8.1.");
 const [major, minor] = process.versions.node.split(".").map(Number);
 if (major < 22 || (major === 22 && minor < 20)) throw new Error("Upstream skills requires Node >=22.20.");
 const binary = process.execPath;
@@ -22,6 +23,7 @@ copyFileSync(resolve("scripts/inspect-upstream-dependencies.mjs"), `${destinatio
 copyFileSync(resolve("scripts/prepare-upstream-download.mjs"), `${destination}/prepare-upstream-download.mjs`);
 copyFileSync(resolve("scripts/inspect-eve.mjs"), `${destination}/inspect-eve.mjs`);
 copyFileSync(resolve("scripts/inspect-upstream-plugins.mjs"), `${destination}/inspect-upstream-plugins.mjs`);
+copyFileSync(resolve("scripts/upstream-readonly.mjs"), `${destination}/upstream-readonly.mjs`);
 copyFileSync(resolve("scripts/inspect-upstream-discovery.mjs"), `${destination}/inspect-upstream-discovery.mjs`);
 copyFileSync(resolve("scripts/inspect-upstream-provider.mjs"), `${destination}/inspect-upstream-provider.mjs`);
 copyFileSync(resolve("scripts/workshop-builtins.mjs"), `${destination}/workshop-builtins.mjs`);
@@ -91,7 +93,7 @@ const { runInNewContext } = await import("node:vm");
 const useAgents = runInNewContext(`(${useConfig})`, {}, {timeout:1000});
 if (Object.keys(useAgents).sort().join(",") !== "claude-code,codex,sarvam-code" || Object.values(useAgents).some(a => typeof a.command !== "string" || a.args.length)) throw new Error("Review upstream interactive use contract.");
 writeFileSync(`${destination}/use-agents.json`, JSON.stringify(useAgents));
-const agents = readUpstreamAgents(code);
+const agents = readUpstreamAgents(readFileSync(`${source}/${upstreamChunk}`, "utf8"));
 writeFileSync(`${destination}/agents.json`, JSON.stringify(agents, null, 2));
 const parserCheck = spawnSync(binary, [`${destination}/inspect-upstream-source.mjs`, "owner/repo#main@selected-skill"], { encoding: "utf8", env: { ...process.env, GH_HOST: "github.com" } });
 if (parserCheck.status !== 0) throw new Error("Review pinned read-only source parser.");

@@ -1,21 +1,21 @@
 // Read-only discovery/download expectations from the unchanged pinned provider.
-import { readFile } from "node:fs/promises";
+import { readUpstream } from "./upstream-readonly.mjs";
 import { runInNewContext } from "node:vm";
 import { createHash } from "node:crypto";
 import { crc32, gunzipSync, inflateRawSync } from "node:zlib";
-import { parse } from "./skills/node_modules/yaml/dist/index.js";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+
+const packagePath = process.argv[6] || fileURLToPath(new URL("./skills/package.json", import.meta.url));
+const { parse } = createRequire(packagePath)("yaml");
 
 try {
-const code = await readFile(new URL("./skills/dist/cli.mjs", import.meta.url), "utf8");
-function block(start, end) {
-  const a=code.indexOf(start), b=code.indexOf(end,a);
-  if(a<0||b<a) throw new Error("Review pinned provider boundaries.");
-  return code.slice(a,b);
-}
-const functions=block("function parseFrontmatter(raw) {","function isContainedIn(")
-  +block("const CSI_RE =","const silentOutput =")
-  +block("const ZIP_LOCAL_FILE_HEADER =", "const DISCOVERY_SCHEMA_V2 =")
-  +block("const DISCOVERY_SCHEMA_V2 =","const wellKnownProvider =");
+const { block, cli, diagnostics, isDiagnostic, metadata } = await readUpstream(packagePath);
+const functions = metadata()
+  + block("function isRecord$1(", "async function hasSkillMd(")
+  + block("const EXCLUDE_FILES =", "async function computeSkillFolderHash(")
+  + block("const ZIP_LOCAL_FILE_HEADER =", "const DISCOVERY_SCHEMA_V2 =")
+  + block("const DISCOVERY_SCHEMA_V2 =", "const wellKnownProvider =");
 function safeUrl(input) {
   const u=new URL(input);
   if(!["http:","https:"].includes(u.protocol)||u.username||u.password||u.search||u.hash) throw new Error("Downloads require HTTP(S) URLs without credentials, query or fragment.");
@@ -54,8 +54,8 @@ async function boundedFetch(input,options={}) {
     throw new Error("Too many download redirects.");
   } catch(error) { failures.push(`${String(error)}${error.cause?.code ? ` (${error.cause.code})` : ""}`);throw error; }
 }
-const contract=runInNewContext(functions+block("async function checkWellKnownForUpdates(baseUrl, items) {","function printNewSkills(")+"\nconst wellKnownProvider=new WellKnownProvider(); ({provider:wellKnownProvider,digest:computeWellKnownSkillDigest,check:checkWellKnownForUpdates});",{
-  URL,AbortSignal,Buffer,TextDecoder,Uint8Array,parse,crc32,fetch:boundedFetch,createHash$1:createHash,
+const contract=runInNewContext(functions+block("async function checkWellKnownForUpdates(baseUrl, items) {","function printNewSkills(", cli)+"\nconst wellKnownProvider=new WellKnownProvider(); ({provider:wellKnownProvider,digest:computeWellKnownSkillDigest,hash:hashSkillFiles,excluded:isExcludedPath,internal:isInternalSkill,check:checkWellKnownForUpdates});",{
+  URL,AbortSignal,Buffer,TextDecoder,Uint8Array,parse,crc32,diagnostics,isDiagnostic,createHash,fetch:boundedFetch,createHash$1:createHash,
   gunzipSync:(bytes)=>gunzipSync(bytes,{maxOutputLength:1024*1024}),
   inflateRawSync:(bytes)=>inflateRawSync(bytes,{maxOutputLength:1024*1024}),
 },{timeout:1000});
@@ -126,10 +126,11 @@ if(process.argv[3]==="--document") {
     for(const [path] of files) for(const [other] of files) if(other.startsWith(path+"/")) throw new Error("Conflicting download file paths.");
     const hash=createHash("sha256");
     for(const [path,bytes] of [...files].sort((a,b)=>a[0].localeCompare(b[0]))) hash.update(path).update(bytes);
-    const fingerprint=hash.digest("hex");
+    const selectionHash=hash.digest("hex");
+    const fingerprint=contract.hash(files.filter(([path])=>!contract.excluded(path)).map(([path,content])=>({path,content})));
     result.push({sourceIdentifier:provider.getSourceIdentifier(source),name:skill.installName,description:skill.description,content:skill.content,
-      internal:skill.metadata?.internal===true,sourceUrl:skill.sourceUrl,fingerprint,digest:contract.digest(skill),
-      selectionFingerprint:JSON.stringify([fingerprint,skill.sourceUrl,skill.indexEntry]),
+      internal:contract.internal(skill.metadata),sourceUrl:skill.sourceUrl,fingerprint,digest:contract.digest(skill),
+      selectionFingerprint:JSON.stringify([selectionHash,skill.sourceUrl,skill.indexEntry]),
       files:files.map(([path,bytes])=>[path,bytes.toString("hex")])});
   }
   const output=JSON.stringify(result);

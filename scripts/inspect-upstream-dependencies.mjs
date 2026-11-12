@@ -5,9 +5,10 @@ import {basename,dirname,isAbsolute,join,normalize,posix,relative,resolve,sep} f
 import {homedir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {runInNewContext} from 'node:vm';
+import { readProjectLock, readUpstream } from './upstream-readonly.mjs';
 import {parse} from './skills/node_modules/yaml/dist/index.js';
-const code=await readFile(new URL('./skills/dist/cli.mjs',import.meta.url),'utf8');
-function block(a,b){const start=code.indexOf(a),end=code.indexOf(b,start);if(start<0||end<start)throw new Error('Review pinned dependency boundaries.');return code.slice(start,end);}
+const upstream = await readUpstream();
+const { block, cli, diagnostics, isDiagnostic } = upstream;
 const cwd=resolve(process.argv[2]);const options=JSON.parse(process.argv[3]??'{}');
 let bytes=0,entries=0,exceeded=false,rejected=false;const observed=new Map();
 function limit(){exceeded=true;throw new Error('Dependency discovery exceeds limits.');}
@@ -24,10 +25,15 @@ async function boundedRead(file,encoding){
 async function boundedDirs(...args){const list=await readdir(...args);if((entries+=list.length)>5000)limit();return list;}
 async function* boundedGlob(patterns,opts){for await(const file of glob(patterns,opts)){if(++entries>5000||relative(cwd,resolve(cwd,file)).startsWith('..'))limit();yield file;}}
 const definitions=JSON.parse(await readFile(new URL('./agents.json',import.meta.url),'utf8'));
-const agents=Object.fromEntries(definitions.map(a=>[a.id,a]));let contract;
-const functions=block('const DEFAULT_GITHUB_HOST = "github.com";','const CSI_RE =')+block('const CSI_RE =','const silentOutput =')+block('function parseFrontmatter(raw) {','const LOCAL_LOCK_FILE =')+block('const LOCAL_LOCK_FILE =','const home = homedir();')+block('function sanitizeName(name) {','function isPathSafe$2(')+block('const NPM_PREFIX = "npm:";','async function promptForAgentChoice(')+block('function isFromRequest(entry, request) {','async function runSync(')+block('function getLockSource(parsedUrl, normalizedSource) {','function getProjectLockSourceUrl(')+block('function getProjectLockSource(parsed) {','function projectLockEntry(');
+const agents=Object.fromEntries(definitions.map(a=>[a.id,{...a,skillsDir:a.projectPath}]));let contract;
+const functions = upstream.source() + upstream.metadata() + upstream.discovery()
+  + block('const NPM_PREFIX =', 'async function promptForAgentChoice(', cli)
+  + block('function isFromRequest(', 'async function runSync(', cli)
+  + block('function getLockSource(', 'function getProjectLockSourceUrl(')
+  + block('function getProjectLockSource(parsed)', 'function projectLockEntry(');
 contract=runInNewContext(functions+'\n({discoverNodeModuleSkills,discoverSkills,matchesSkill,sanitizeName,resolveConflicts,pruneStaleSkills,foreignDestination,isFromRequest,isRemoteInstalled,getProjectLockSource,readLocalLock,filterRemoteRequests,remoteAllowsSkill,requestsLockedSkill,blockedReason,parseSkillMd})',{
- URL,basename,dirname,isAbsolute,join,normalize,posix,relative,resolve,sep,homedir,createHash,parse,agents,
+ URL,basename,dirname,isAbsolute,join,normalize,posix,relative,resolve,sep,homedir,createHash,parse,agents,diagnostics,isDiagnostic,
+ readLocalLock:directory=>readProjectLock(directory,boundedRead,diagnostics),warn(){},
  readFile:boundedRead,readdir:boundedDirs,realpath,stat,lstat,readlink,existsSync,glob:boundedGlob,
  getCanonicalSkillsDir:()=>join(cwd,'.agents/skills'),getCanonicalPath:name=>join(cwd,'.agents/skills',contract.sanitizeName(name)),getInstallPath:(name,id)=>join(cwd,agents[id].projectPath,contract.sanitizeName(name)),
  process:{env:{GH_HOST:process.env.GH_HOST},cwd:()=>cwd},console:{warn(){}},
@@ -36,7 +42,7 @@ let result;
 if(options.source){result={skills:await contract.discoverSkills(cwd,options.subpath,{includeInternal:!!options.includeInternal})};if(options.declarers)result.skills=result.skills.filter(skill=>contract.remoteAllowsSkill({declarers:options.declarers},contract.sanitizeName(skill.name),options));}
 else {
  result=await contract.discoverNodeModuleSkills(cwd,!!options.recursive);
- if(result.errors.length||result.warnings.length)throw new Error([...result.errors,...result.warnings].join('\n'));
+ if(result.errors.length||result.warnings.length)throw new Error([...result.errors,...result.warnings].map(d=>d.message??String(d)).join('\n'));
  result.skills=result.skills.filter(s=>(!options.include?.length||contract.matchesSkill(s,options.include))&&!(options.exclude?.length&&contract.matchesSkill(s,options.exclude)));
  const lock=await contract.readLocalLock(cwd);const selected=options.agents??[];
  if(selected.length){const conflicts=await contract.resolveConflicts(result.skills,selected,lock.skills,cwd);if(conflicts.skipped.length)throw new Error(conflicts.skipped.map(s=>`${s.skill.name}: ${s.reason}`).join('\n'));result.skills=conflicts.install;}

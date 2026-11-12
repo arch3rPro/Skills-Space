@@ -1243,23 +1243,27 @@ pub(super) fn removal_plan(
     }
     Ok(Some(plans))
 }
-// Restrict CLI reinstalls to original targets when local associations exist. CLI bytes and locks remain unchanged.
+// Reuse explicit original-CLI installation targets when an unrestricted update would widen the operation.
 pub(super) fn update_args(engine: &Engine, op: &Operation) -> Result<Option<Vec<String>>, String> {
     if op.action != "update" || op.skills.len() != 1 {
         return Ok(None);
     }
-    let Ok(data) = read(engine) else {
-        return Ok(None);
-    };
+    let relations = read(engine).map(|data| data.records).unwrap_or_default();
     let inventory = engine.inventory(&op.target)?;
     let name = &op.skills[0];
-    if !data.records.iter().any(|r| {
+    let associated = relations.iter().any(|r| {
         r.name == *name
             && inventory
                 .skills
                 .iter()
                 .any(|s| s.name == *name && Path::new(&s.path) == Path::new(&r.source))
-    }) {
+    });
+    if !associated
+        && inventory
+            .agents
+            .iter()
+            .any(|agent| agent.detected && agent.id != dsh::ID)
+    {
         return Ok(None);
     }
     let originals: Vec<_> = inventory
@@ -1279,10 +1283,9 @@ pub(super) fn update_args(engine: &Engine, op: &Operation) -> Result<Option<Vec<
     };
     let mut agents: Vec<_> = originals
         .iter()
-        .flat_map(|s| s.agents.iter())
+        .flat_map(|s| s.cli_agents.iter())
         .filter(|id| {
-            !data
-                .records
+            !relations
                 .iter()
                 .any(|r| r.target == op.target && r.name == *name && r.agents.contains(id))
         })
@@ -1297,6 +1300,16 @@ pub(super) fn update_args(engine: &Engine, op: &Operation) -> Result<Option<Vec<
     add.action = "add".into();
     add.source = Some(source);
     add.agents = agents;
+    add.copy = entry["installMode"] == "copy" || op.copy;
+    if add.agents.iter().any(|id| id == "eve") {
+        add.eve_subagents = entry["subagents"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|slot| slot.as_str())
+            .map(|slot| if slot.is_empty() { "root" } else { slot }.to_owned())
+            .collect();
+    }
     add.include_internal = false;
     operation_args(engine, &add).map(Some)
 }
