@@ -8,8 +8,31 @@
 }
 
 :host(.dsh-skills-host) .dsh-skills-surface {
+  position: relative;
   height: 100%;
   min-height: 0;
+}
+
+/* Keep dialogs inside the plugin pane, including narrow DSH windows. The
+   portal sits outside the inventory scroller so its content is not clipped. */
+.dsh-skills-overlay-host {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+.dsh-skills-overlay-host > * {
+  pointer-events: auto;
+}
+.dsh-skills-overlay-host > [data-slot="dialog-overlay"],
+.dsh-skills-overlay-host > [data-slot="alert-dialog-overlay"] {
+  position: absolute;
+}
+.dsh-skills-overlay-host > [data-slot="dialog-content"],
+.dsh-skills-overlay-host > [data-slot="alert-dialog-content"] {
+  position: absolute;
+  width: calc(100% - 2rem);
+  max-height: min(90dvh, calc(100% - 2rem));
 }
 
 .dsh-skills-scroll {
@@ -63,26 +86,6 @@
   color-scheme: inherit;
 }
 
-@container skill-inventory (min-width: 800px) {
-  .dsh-split-layout {
-    height: clamp(20rem, calc(100dvh - 15rem), 48rem);
-  }
-  .dsh-split-layout > [data-slot="card"] {
-    height: 100%;
-    min-height: 0;
-  }
-}
-
-.dsh-split-pane {
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-}
-.dsh-split-pane::-webkit-scrollbar {
-  display: none;
-}
-
 .dsh-filter-menu {
   --accent: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-layer-1));
   width: min(15rem, calc(100vw - 2rem));
@@ -117,10 +120,4 @@
 .dsh-settings-space .toolbar-actions {
   margin-left: 0;
   justify-content: flex-end;
-}
-.dsh-settings-space .dsh-split-layout > [data-slot="card"]:first-child {
-  max-height: 16rem;
-}
-.dsh-settings-space .dsh-split-layout > [data-slot="card"]:last-child {
-  min-height: 20rem;
 }

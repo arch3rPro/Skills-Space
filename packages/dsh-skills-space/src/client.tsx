@@ -1,11 +1,11 @@
 import { DshDirectoryEmpty, DshPresetEmpty } from "@/components/dsh-directory-empty";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BookOpenIcon, BugIcon, CircleArrowUpIcon, Columns2Icon, FolderOpenIcon, GitBranchIcon, GlobeIcon, Grid2X2Icon, InfoIcon, FilePenLineIcon, PackagePlusIcon, RefreshCwIcon, StoreIcon, Trash2Icon } from "lucide-react";
+import { BookOpenIcon, BugIcon, CircleArrowUpIcon, FolderOpenIcon, GitBranchIcon, GlobeIcon, InfoIcon, FilePenLineIcon, PackagePlusIcon, RefreshCwIcon, StoreIcon, Trash2Icon } from "lucide-react";
 import GithubIcon from "@lobehub/icons/es/Github";
 import { BulkSelectionBar } from "@/components/bulk-selection-bar";
 import { Hint } from "@/components/hint";
-import { InventoryCard, InventoryCardFooter, InventoryCardHeader, InventoryListRow, InventoryListActions } from "@/components/inventory-card";
+import { InventoryCard, InventoryCardFooter, InventoryCardHeader } from "@/components/inventory-card";
 import { InventoryEmpty } from "@/components/inventory-empty";
 import { InventoryToolbar, InventoryToolbarBatchSelect, InventoryToolbarCheckUpdates, InventoryToolbarFilterTrigger, InventoryToolbarRefresh, InventoryToolbarSearch } from "@/components/inventory-toolbar";
 import { InventoryPagination } from "@/components/inventory-pagination";
@@ -121,7 +121,7 @@ function Surface({ children, appearance, scrollable = false }: { children: React
   const theme = useSyncExternalStore(appearance.subscribe, appearance.getSnapshot);
   return <div ref={attach} className={scrollable ? 'dsh-skills-host' : undefined}>
     {target && createPortal(<><style>{shadowStyles}</style><div className={`${theme.active.colorScheme==='dark' ? "dsh-skills-surface dark" : "dsh-skills-surface"}`} style={{colorScheme:theme.active.colorScheme}}>
-      <div ref={setOverlay} />
+      <div ref={setOverlay} className={scrollable ? 'dsh-skills-overlay-host' : undefined} />
       <div className={scrollable ? 'dsh-skills-scroll subtle-scrollbar' : undefined}>
         <OverlayContainer.Provider value={overlay ?? undefined}><TooltipProvider>{children}</TooltipProvider></OverlayContainer.Provider>
       </div>
@@ -151,8 +151,8 @@ function inventorySource(skill: Skill, collection: string, t: Translate) {
   return collection === 'managed' && (skill.installation?.sourceType || skill.installation?.source)
     ? managedSkillSourceLabel(asInstalled(skill), zh) : skill.state ? dshSourceLabel(skill.state, zh) : sourceLabel(skill.source, t);
 }
-function DetailsMetadata({ skill, home, t, collection, onOpen, compact, version, versionState }: { skill: Skill; home: string; t: Translate; collection: string; onOpen?: () => void; compact?: boolean; version: string | null; versionState: "loading" | "ready" | "error" }) {
-  return <SkillDetailMetadata compact={compact}>
+function DetailsMetadata({ skill, home, t, collection, onOpen, version, versionState }: { skill: Skill; home: string; t: Translate; collection: string; onOpen?: () => void; version: string | null; versionState: "loading" | "ready" | "error" }) {
+  return <SkillDetailMetadata>
       <SkillDetailVersion version={version} state={versionState} zh={t('zh', 'en') === 'zh'}/>
       <SkillDetailField icon={FolderOpenIcon} label={t('技能位置', 'Skill location')}>
         <SkillDetailPath path={skill.path} home={home} openLabel={t('打开目录', 'Open folder')} onOpen={onOpen}/>
@@ -162,8 +162,8 @@ function DetailsMetadata({ skill, home, t, collection, onOpen, compact, version,
       </SkillDetailField>
     </SkillDetailMetadata>;
 }
-function Details({ skill, home, collection, workspace, revision, t, onRetry, onOpen, compact }: {
-  skill: Skill; home: string; collection: string; workspace: string; revision: number; t: Translate; onRetry: () => void; onOpen?: () => void; compact?: boolean;
+function Details({ skill, home, collection, workspace, revision, t, onRetry, onOpen }: {
+  skill: Skill; home: string; collection: string; workspace: string; revision: number; t: Translate; onRetry: () => void; onOpen?: () => void;
 }) {
   const load = useCallback((signal: AbortSignal) => request<{ content: string; version: string | null }>({ inventory: "1", ...(workspace ? { workspace } : {}), skill: skill.id }, { signal }), [workspace, skill.id]);
   const state = useRequest(load, JSON.stringify([workspace, skill.id]), revision);
@@ -174,7 +174,7 @@ function Details({ skill, home, collection, workspace, revision, t, onRetry, onO
   const installedVersion = collection === 'managed' ? skill.installation?.version : null;
   const versionState = installedVersion ? 'ready' : !state ? 'loading' : state.failed ? 'error' : 'ready';
   return <section aria-label={t('技能预览', 'Skill preview')} className="flex min-w-0 flex-col gap-4">
-    <DetailsMetadata skill={skill} home={home} collection={collection} t={t} onOpen={onOpen} compact={compact} version={installedVersion ?? state?.data?.version ?? null} versionState={versionState}/>
+    <DetailsMetadata skill={skill} home={home} collection={collection} t={t} onOpen={onOpen} version={installedVersion ?? state?.data?.version ?? null} versionState={versionState}/>
     {!skill.discoverable && <p className="text-sm text-muted-foreground">{t('已安装到共享目录，当前预设未确认发现此文件。', 'Installed in the shared directory; discovery is not confirmed for the selected preset.')}</p>}
     {skill.shadowed && <p className="text-sm text-muted-foreground">{t('存在优先级更高的同名技能。', 'A higher-priority skill has the same name.')}</p>}
     {!state ? <Loading label={t('读取技能正文', 'Reading skill document')} /> : state.failed
@@ -187,20 +187,18 @@ function Details({ skill, home, collection, workspace, revision, t, onRetry, onO
 }
 function hasInstallationTarget(config: Bootstrap) { return config.installGlobal || config.workspaces.some(item => item.installable); }
 type Filters = { source: string; query: string; status: string };
-type Preferences = { workspace: string; preset: string; layout: string; collection: string; filters: Map<string, Filters> };
+type Preferences = { workspace: string; preset: string; filters: Map<string, Filters> };
 type UpdateEntry = { name: string; status: 'available' | 'current' | 'unknown'; localState: 'clean' | 'modified' | 'unverified'; currentRevision: string | null; latestRevision: string | null };
 type SessionView = { scope: string; global: Preferences; project: Preferences };
 const emptyFilters: Filters = { source: 'all', query: '', status: 'all' };
-const inventoryPreferences = (): Preferences => ({ workspace: '', preset: 'all', layout: 'cards', collection: 'all', filters: new Map() });
+const inventoryPreferences = (): Preferences => ({ workspace: '', preset: 'all', filters: new Map() });
 
-function InventoryPage({ config, project, t, preferences, reload, onInstall, inventoryRevision, onMutation, onDetailChange, getScrollContainer, toolbarLayout = "scroll" }: {
+function InventoryPage({ config, project, t, preferences, reload, onInstall, inventoryRevision, onMutation, onCount, onDetailChange, getScrollContainer, toolbarLayout = "scroll" }: {
   config: Bootstrap; project: boolean; t: Translate; preferences: Preferences; reload: () => Promise<boolean>; onInstall: (destination: Destination) => void;
-  inventoryRevision: number; onMutation: () => void; onDetailChange: (open: boolean) => void; getScrollContainer: () => HTMLElement | null; toolbarLayout?: "scroll" | "wrap";
+  inventoryRevision: number; onMutation: () => void; onCount: (scope: 'global' | 'project', count: number | null) => void; onDetailChange: (open: boolean) => void; getScrollContainer: () => HTMLElement | null; toolbarLayout?: "scroll" | "wrap";
 }) {
   const [workspace, setWorkspace] = useState(preferences.workspace);
   const [preset, setPreset] = useState(preferences.preset);
-  const [layout, setLayout] = useState(preferences.layout);
-  const [collection, setCollection] = useState(preferences.collection);
   const [filters, setFilters] = useState(preferences.filters);
   const [openSkill, setOpenSkill] = useState('');
   const [localRevision, setRevision] = useState(0);
@@ -278,7 +276,9 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
   const inventory = state?.data?.items ?? [];
   const managed = managedSkills(inventory);
   const allItems = inventorySkills(inventory, presetId);
-  const items = allItems.filter(item => collection === 'all' || skillLifecycle(item) === collection);
+  const totalCount = enabled && state?.data ? inventorySkills(inventory, 'all').length : null;
+  useEffect(() => { onCount(project ? 'project' : 'global', totalCount); }, [project, totalCount, state?.data, onCount, workspaceId]);
+  const items = allItems;
   const anyTarget = hasInstallationTarget(config);
   const add = () => onInstall({ workspace: workspaceId || null });
   const { source, query, status } = filters.get(context) ?? emptyFilters;
@@ -288,8 +288,7 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
     if (next.source !== undefined || next.status !== undefined) setSelection(undefined);
   }
   const sources = [{ value: 'all', label: t('全部来源', 'All sources') }, ...[...new Map(
-    allItems.filter(item => collection === 'all' || skillLifecycle(item) === collection)
-      .map(item => [inventorySourceKey(item), { value: inventorySourceKey(item), label: inventorySource(item, skillLifecycle(item), t) }]),
+    allItems.map(item => [inventorySourceKey(item), { value: inventorySourceKey(item), label: inventorySource(item, skillLifecycle(item), t) }]),
   ).values()]];
   const sourceFilter = sources.some(item => item.value === source) ? source : 'all';
   const managedStatus = ['enabled', 'disabled'].includes(status) ? status : 'all';
@@ -299,7 +298,7 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
   const [cardPageSizeOverride, setCardPageSizeOverride] = useState<number | null>(null);
   const cardPageSize = cardPageSizeOverride ?? wideInventoryPageSize;
   const [cardPageChoice, setCardPageChoice] = useState({ key: '', page: 1 });
-  const cardPageKey = JSON.stringify([context, collection, query, sourceFilter, managedStatus]);
+  const cardPageKey = JSON.stringify([context, query, sourceFilter, managedStatus]);
   const cardPageCount = Math.max(1, Math.ceil(visible.length / cardPageSize));
   const cardPage = cardPageChoice.key === cardPageKey ? Math.min(cardPageChoice.page, cardPageCount) : 1;
   const cardItems = visible.slice((cardPage - 1) * cardPageSize, cardPage * cardPageSize);
@@ -308,18 +307,17 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
   }, [context, source, sourceFilter, status, managedStatus, state?.data]);
   function clearFilters() {
     changeFilters(emptyFilters); setOpenSkill('');
-    preferences.collection = 'all'; setCollection('all');
     preferences.preset = 'all'; setPreset('all');
   }
   const directoryState = nativeDirectoryState(state?.data, presetId);
   const presetNames = (ids: string[]) => config.presets.filter(item => ids.includes(item.id)).map(item => presetText(item, t).name).join('、');
   const partial = !!state?.data?.managedPartial || directoryState.failed.length > 0 || items.some(item => item.state?.policyBlocker === 'unavailable');
-  const filtered = !!needle || collection !== 'all' || sourceFilter !== 'all' || managedStatus !== 'all' || presetId !== 'all';
-  const filterCount = Number(collection !== 'all') + Number(sourceFilter !== 'all') + Number(managedStatus !== 'all') + Number(presetId !== 'all');
+  const filtered = !!needle || sourceFilter !== 'all' || managedStatus !== 'all' || presetId !== 'all';
+  const filterCount = Number(sourceFilter !== 'all') + Number(managedStatus !== 'all') + Number(presetId !== 'all');
   const updateable = managed.filter(item => item.managedUpdateable);
   const refresh = () => setRevision(current => current + 1);
   const selecting = selection?.context === context;
-  const detail = selecting ? undefined : visible.find(item => item.id === openSkill) ?? (layout === 'list' ? visible[0] : undefined);
+  const detail = selecting ? undefined : visible.find(item => item.id === openSkill);
   const selectable=(item:Skill)=>item.removable||canChangeDsh(asInstalled(item),'invocation');
   const eligible = visible.filter(selectable);
   const chosen = selecting ? items.filter(item => selection.ids.includes(item.id)) : [];
@@ -498,7 +496,7 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
     await writeRequest('policy',{...destination,collection:'native',operation:change.action,configurationRevision:change.configurationRevision,policyRevision:change.revision,skills});
   }
   const policyControls=<DshBatchControls controller={policyController} skills={policySkills} target={policyTarget} contextKey={null} revision={state?.data?.configurationRevision ?? ''} policyRevision={state?.data?.policy?.revision??''} home={config.userHome} disabled={busy||!!state?.refreshing} maxPolicySkills={policyLimit} zh={t('zh','en')==='zh'} onBusy={setPolicyBusy} onSnapshot={onMutation} onChanged={onMutation} allowRemoval={false} showControls={!!selecting} savePolicy={savePolicy}/>;
-  const detailOpen = layout === 'cards' && !!detail;
+  const detailOpen = !!detail;
   useLayoutEffect(() => onDetailChange(detailOpen), [detailOpen, onDetailChange]);
   useLayoutEffect(() => {
     if (detailOpen) {
@@ -571,9 +569,8 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
           <DropdownMenu>
             <DropdownMenuTrigger asChild><InventoryToolbarFilterTrigger label={t('筛选', 'Filter')} ariaLabel={t('筛选技能', 'Filter skills')} count={filterCount} /></DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="dsh-filter-menu">
-              {project && selectedWorkspace && <><DropdownMenuLabel>{t('项目', 'Project')}</DropdownMenuLabel><DropdownMenuRadioGroup value={workspaceId} onValueChange={value => { preferences.workspace = value; setWorkspace(value); setSelection(undefined); setOpenSkill(''); }}>{config.workspaces.map(item => <DropdownMenuRadioItem key={item.id} value={item.id} title={workspaceLabel(item)}><span className="truncate">{workspaceLabel(item)}</span></DropdownMenuRadioItem>)}</DropdownMenuRadioGroup><DropdownMenuSeparator /></>}
-              <DropdownMenuLabel>{t('技能范围', 'Skill scope')}</DropdownMenuLabel><DropdownMenuRadioGroup value={collection} onValueChange={value => { preferences.collection = value; setCollection(value); setSelection(undefined); setOpenSkill(''); }}><DropdownMenuRadioItem value="all">{t('全部技能', 'All skills')} · {allItems.length}</DropdownMenuRadioItem><DropdownMenuRadioItem value="managed">{t('共享目录', 'Shared directory')} · {allItems.filter(item => skillLifecycle(item) === 'managed').length}</DropdownMenuRadioItem><DropdownMenuRadioItem value="native">{t('其他目录', 'Other directories')} · {allItems.filter(item => skillLifecycle(item) === 'native').length}</DropdownMenuRadioItem></DropdownMenuRadioGroup>
-              <DropdownMenuSeparator /><DropdownMenuLabel>{t('来源', 'Source')}</DropdownMenuLabel><DropdownMenuRadioGroup value={sourceFilter} onValueChange={source => changeFilters({ source })}>{sources.map(item => <DropdownMenuRadioItem key={item.value} value={item.value}><span className="truncate">{item.label}</span></DropdownMenuRadioItem>)}</DropdownMenuRadioGroup>
+              {project && selectedWorkspace && <><DropdownMenuLabel>{t('项目', 'Project')}</DropdownMenuLabel><DropdownMenuRadioGroup value={workspaceId} onValueChange={value => { onCount('project', null); preferences.workspace = value; setWorkspace(value); setSelection(undefined); setOpenSkill(''); }}>{config.workspaces.map(item => <DropdownMenuRadioItem key={item.id} value={item.id} title={workspaceLabel(item)}><span className="truncate">{workspaceLabel(item)}</span></DropdownMenuRadioItem>)}</DropdownMenuRadioGroup><DropdownMenuSeparator /></>}
+              <DropdownMenuLabel>{t('来源', 'Source')}</DropdownMenuLabel><DropdownMenuRadioGroup value={sourceFilter} onValueChange={source => changeFilters({ source })}>{sources.map(item => <DropdownMenuRadioItem key={item.value} value={item.value}><span className="truncate">{item.label}</span></DropdownMenuRadioItem>)}</DropdownMenuRadioGroup>
               <DropdownMenuSeparator /><DropdownMenuLabel>{t('状态', 'Status')}</DropdownMenuLabel><DropdownMenuRadioGroup value={managedStatus} onValueChange={status => changeFilters({ status })}><DropdownMenuRadioItem value="all">{t('全部状态', 'All states')}</DropdownMenuRadioItem><DropdownMenuRadioItem value="enabled">{t('已启用', 'Enabled')}</DropdownMenuRadioItem><DropdownMenuRadioItem value="disabled">{t('已停用', 'Disabled')}</DropdownMenuRadioItem></DropdownMenuRadioGroup>
               {!!presetChoices.length && <><DropdownMenuSeparator /><DropdownMenuLabel>{t('Agent 预设', 'Agent preset')}</DropdownMenuLabel><DropdownMenuRadioGroup value={presetId} onValueChange={value => { preferences.preset = value; setPreset(value); setSelection(undefined); setOpenSkill(''); }}><DropdownMenuRadioItem value="all">{t('全部预设', 'All presets')}</DropdownMenuRadioItem>{presetChoices.map(item => <DropdownMenuRadioItem key={item.id} value={item.id}>{presetText(item, t).name}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></>}
               {filterCount > 0 && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={clearFilters}>{t('清除筛选', 'Clear filters')}</DropdownMenuItem></>}
@@ -583,9 +580,6 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
         </div>
         <div className="toolbar-actions ml-auto flex shrink-0 items-center gap-2">
           <InventoryToolbarCheckUpdates label={t('检查更新', 'Check updates')} checking={checkingUpdates} disabled={busy || checkingUpdates || !!state?.refreshing || !updateable.length} onClick={() => void checkUpdates()} />
-          <ToggleGroup type="single" size="xs" className="segmented-control" value={layout} onValueChange={value => { if (value) { preferences.layout = value; lastCard.current = ''; setLayout(value); setOpenSkill(''); } }} aria-label={t('技能视图', 'Skill view')}>
-            <ToggleGroupItem value="cards" aria-label={t('卡片', 'Cards')} title={t('卡片', 'Cards')}><Grid2X2Icon aria-hidden="true" /></ToggleGroupItem><ToggleGroupItem value="list" aria-label={t('列表和详情', 'List and details')} title={t('列表和详情', 'List and details')}><Columns2Icon aria-hidden="true" /></ToggleGroupItem>
-          </ToggleGroup>
           {(selecting || eligible.length > 0) && <InventoryToolbarBatchSelect buttonRef={bulkTrigger} label={t('批量选择', 'Select multiple')} cancelLabel={t('取消选择', 'Cancel selection')} selecting={selecting} disabled={busy || (!selecting && !eligible.length)} onClick={() => { setSelection(selecting ? undefined : { context, ids: [] }); setOpenSkill(''); }} />}
           <Button size="sm" disabled={!anyTarget} onClick={add}><PackagePlusIcon data-icon="inline-start" />{t('添加技能', 'Add skills')}</Button>
         </div>
@@ -595,29 +589,23 @@ function InventoryPage({ config, project, t, preferences, reload, onInstall, inv
       {exceedsPolicyLimit && <p role="status" className="text-sm text-muted-foreground">{t(`每次最多为 ${policyLimit} 个技能修改启停或调用设置。`, `Change enablement or invocation for at most ${policyLimit} skills at once.`)}</p>}
       <div className="app-content inventory-card-scrollbar min-w-0 p-1" data-dsh-inventory-scroll>
       {!enabled ? <><Notice title={t('暂无项目工作区', 'No project workspaces')} description={t('在 DSH 添加项目后，刷新工作区列表。', 'Add a project in DSH, then refresh the workspace list.')} /><Button variant="outline" className="self-center" disabled={checkingContext} onClick={() => void refreshContext()}>{t('刷新', 'Refresh')}</Button></>
-        : !state ? layout === 'cards' ? <LoadingCards label={t('读取技能', 'Reading skills')} variant="inventory" className="skill-grid gap-3" /> : <div className="grid min-w-0 grid-cols-1 gap-3 @min-[800px]/skill-inventory:grid-cols-[minmax(22rem,2fr)_minmax(0,3fr)]"><Card variant="inventory"><CardContent className="grid gap-2"><Skeleton className="h-8" /><Skeleton className="h-8" /><Skeleton className="h-8" /></CardContent></Card><Loading label={t('读取技能', 'Reading skills')} /></div>
+        : !state ? <LoadingCards label={t('读取技能', 'Reading skills')} variant="inventory" className="skill-grid gap-3" />
         : state.failed ? <InventoryEmpty kind="failed" zh={t('zh', 'en') === 'zh'} disabled={state.refreshing} onRetry={refresh} onClear={clearFilters} onAdd={add} />
         : <>
           {state.data?.policy?.status==='error'&&<Alert variant="destructive"><AlertDescription>{t('技能启停与调用设置无法读取，请检查设置文件后刷新。','Enablement and invocation settings could not be read. Check the settings file and refresh.')}<p className="break-all font-mono text-xs">{state.data.policy.file}</p></AlertDescription></Alert>}
           {state.data?.ownership === 'error' && <Alert variant="destructive"><AlertDescription role="alert">{t('安装记录无法读取，暂不能确认托管归属或执行卸载。已知条目会保留。', 'Installation records could not be read. Managed ownership and removal are unavailable; known items are retained.')}{visible.length > 0 && <Button variant="outline" size="sm" className="mt-2" disabled={state.refreshing} onClick={refresh}>{t('重新读取安装记录', 'Reload installation records')}</Button>}</AlertDescription></Alert>}
           {partial && <Alert><AlertDescription>{directoryState.failed.length ? t(`以下预设的技能目录未能完整读取：${presetNames(directoryState.failed)}。请检查目录设置后刷新。`, `Skill directories could not be fully read for ${presetNames(directoryState.failed)}. Check their directory settings and refresh.`) : state.data?.managedPartial ? t('共享技能目录未能完整读取，请刷新重试。', 'The shared skill directory could not be fully read. Refresh to retry.') : t('部分技能文件无法读取，请刷新重试。', 'Some skill files could not be read. Refresh to retry.')}</AlertDescription></Alert>}
           {!visible.length ? <InventoryEmpty kind={state.data?.ownership === 'error' ? 'failed' : partial ? 'failed' : filtered ? 'filtered' : 'managed'} zh={t('zh', 'en') === 'zh'} disabled={state.refreshing || (!filtered && !anyTarget)} onRetry={refresh} onClear={clearFilters} onAdd={add} />
-            : layout === 'list' ? <div className="dsh-split-layout grid min-w-0 grid-cols-1 items-stretch gap-3 @min-[800px]/skill-inventory:grid-cols-[minmax(22rem,2fr)_minmax(0,3fr)]">
-              <Card variant="inventory" className="dsh-split-pane min-w-0" role="region" aria-label={t('技能列表', 'Skill list')} tabIndex={0}><CardContent className="grid gap-1">
-                {visible.map(item => <InventoryListRow key={item.id} selected={selecting ? chosen.includes(item) : item.id === detail?.id}><Button variant="plain" role={selecting ? 'checkbox' : undefined} aria-checked={selecting ? chosen.includes(item) : undefined} aria-pressed={selecting ? undefined : item.id === detail?.id} className="h-auto min-w-0 flex-1 flex-col items-start gap-0 py-1 text-left" disabled={busy || selecting && !selectable(item)} onClick={() => selecting ? toggleSkill(item.id) : setOpenSkill(item.id)}><span className="max-w-full truncate">{item.name}</span><span className="max-w-full truncate text-xs text-muted-foreground">{inventorySource(item, skillLifecycle(item), t)}{item.shadowed && t(' · 被覆盖', ' · Shadowed')}</span>{items.some(other => other.id !== item.id && other.name === item.name) && <span className="w-full truncate text-right text-xs text-muted-foreground" dir="rtl"><bdi>{item.path}</bdi></span>}</Button>{!selecting && <InventoryListActions>{skillSwitch(item)}{skillActions(item)}</InventoryListActions>}</InventoryListRow>)}
-              </CardContent></Card>
-              {detail && <Card variant="detail" className="dsh-split-pane min-w-0" role="region" aria-label={t('技能详情', 'Skill details')} tabIndex={0}><CardHeader><CardTitle>{detail.name}</CardTitle>{detail.description && <CardDescription><OverflowText text={detail.description} className="line-clamp-2" /></CardDescription>}</CardHeader><CardContent><Details key={detail.id} skill={detail} home={config.userHome} collection={skillLifecycle(detail)} workspace={workspaceId} revision={revision} t={t} onRetry={refresh} onOpen={config.reveal ? () => void revealSkill(detail) : undefined} compact /></CardContent></Card>}
-            </div>
-            : <><div ref={cardGrid} className="skill-grid grid gap-3" data-dsh-inventory-grid>{cardItems.map(item => <InventoryCard key={item.id} onOpen={selecting && !selectable(item) ? undefined : () => selecting ? toggleSkill(item.id) : showCard(item)}>
+            : <div ref={cardGrid} className="skill-grid grid gap-3" data-dsh-inventory-grid>{cardItems.map(item => <InventoryCard key={item.id} onOpen={selecting && !selectable(item) ? undefined : () => selecting ? toggleSkill(item.id) : showCard(item)}>
               <InventoryCardHeader control={skillSwitch(item)} selection={selecting && <Checkbox aria-label={t(`选择 ${item.name}`, `Select ${item.name}`)} disabled={busy || !selectable(item)} checked={chosen.includes(item)} onCheckedChange={() => toggleSkill(item.id)} />}
                 heading={selecting ? <span className="block max-w-full truncate">{item.name}</span> : <button type="button" ref={element => { if (element) cardButtons.current.set(item.id, element); else cardButtons.current.delete(item.id); }} className="block max-w-full truncate text-left" onClick={() => showCard(item)}>{item.name}</button>}
                 information={!selecting && (item.shadowed || modifiedSkills.has(item.name)) && <Hint text={[item.shadowed && t('存在优先级更高的同名技能。', 'A higher-priority skill has the same name.'), modifiedSkills.has(item.name) && t('本地已修改', 'Locally modified')].filter(Boolean).join(' · ')}><button type="button" className={buttonVariants({ variant: 'ghost', size: 'icon-xs' })} aria-label={t(`查看 ${item.name} 的技能信息`, `View skill information for ${item.name}`)} onClick={() => showCard(item)}><InfoIcon aria-hidden="true" /></button></Hint>}
                 description={<OverflowText className="min-h-10 line-clamp-2 leading-5" text={item.description} />} />
               <InventoryCardFooter metadata={<span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"><FolderOpenIcon aria-hidden="true" className="size-3.5 shrink-0" /><span className="truncate">{inventorySource(item, skillLifecycle(item), t)}</span></span>}>{skillActions(item)}</InventoryCardFooter>
-            </InventoryCard>)}</div></>}
+            </InventoryCard>)}</div>}
         </>}
       </div>
-      {layout === 'cards' && !!state?.data && visible.length > 12 && <InventoryPagination key={`${cardPageKey}:${cardPageSize}`} pages={cardPageCount} page={cardPage} size={cardPageSize} zh={t('zh', 'en') === 'zh'} embedded pageDisabled={busy || !!state?.refreshing} onPage={next => {setCardPageChoice({key:cardPageKey,page:next});listScroller()?.scrollTo({top:0});}} onSize={size => {setCardPageSizeOverride(size);setCardPageChoice({key:cardPageKey,page:1});listScroller()?.scrollTo({top:0});}} />}
+      {!!state?.data && visible.length > 12 && <InventoryPagination key={`${cardPageKey}:${cardPageSize}`} pages={cardPageCount} page={cardPage} size={cardPageSize} zh={t('zh', 'en') === 'zh'} embedded pageDisabled={busy || !!state?.refreshing} onPage={next => {setCardPageChoice({key:cardPageKey,page:next});listScroller()?.scrollTo({top:0});}} onSize={size => {setCardPageSizeOverride(size);setCardPageChoice({key:cardPageKey,page:1});listScroller()?.scrollTo({top:0});}} />}
     </div>
   </div>;
 }
@@ -628,6 +616,9 @@ function Space({ config, reload, failed, t, workspace, view, chooseDirectory, in
   inventoryRevision: number; onMutation: () => void;
 }) {
   const [scope, setScope] = useState(view.scope);
+  const [counts, setCounts] = useState<{global: number | null; project: number | null}>({global: null, project: null});
+  const onCount = useCallback((key: 'global' | 'project', count: number | null) => setCounts(current => current[key] === count ? current : {...current, [key]: count}), []);
+  const inventoryMutated = useCallback(() => { setCounts({global: null, project: null}); onMutation(); }, [onMutation]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [installation, setInstallation] = useState<InstallationStart>();
   const [inventoryVersion, setInventoryVersion] = useState(0);
@@ -663,11 +654,11 @@ function Space({ config, reload, failed, t, workspace, view, chooseDirectory, in
   function complete(target: Destination, _collection: 'managed' | 'native') {
     const next = target.workspace ? "project" : "global";
     view[next].workspace = target.workspace ?? "";
-    view[next].collection = 'all';
     view[next].preset = 'all';
     view[next].filters = new Map(view[next].filters).set(JSON.stringify([config?.configuration?.path, target.workspace ?? "", 'all']), emptyFilters);
     installOpener.current = container.current?.querySelector<HTMLButtonElement>(`[data-skill-scope-tab="${next}"]`) ?? null;
     setInventoryVersion(current => current + 1);
+    setCounts({global: null, project: null});
     setInstallation(undefined);
     changeScope(next);
   }
@@ -689,12 +680,12 @@ function Space({ config, reload, failed, t, workspace, view, chooseDirectory, in
         install={(token, names, destination) => writeRequest<InstallResult>("install", { token, names, ...destination }).finally(onMutation)} />}
       <div className={detailOpen ? undefined : "flex min-h-0 flex-1 flex-col"}><Tabs value={scope} onValueChange={changeScope} className={detailOpen ? undefined : "min-h-0 flex-1 overflow-hidden"}>
         {!detailOpen && <TabsList variant="quiet" className="page-tabs" aria-label={t("技能空间范围", "Skills Space scope")}>
-          <TabsTrigger data-skill-scope-tab="global" value="global"><GlobeIcon aria-hidden="true" />{t("全局管理", "Global")}</TabsTrigger>
-          <TabsTrigger data-skill-scope-tab="project" value="project"><FolderOpenIcon aria-hidden="true" />{t("项目管理", "Projects")}</TabsTrigger>
+          <TabsTrigger data-skill-scope-tab="global" value="global"><GlobeIcon aria-hidden="true" />{t("全局管理", "Global")}{counts.global !== null && <span className="text-xs tabular-nums text-muted-foreground">{counts.global}</span>}</TabsTrigger>
+          <TabsTrigger data-skill-scope-tab="project" value="project"><FolderOpenIcon aria-hidden="true" />{t("项目管理", "Projects")}{counts.project !== null && <span className="text-xs tabular-nums text-muted-foreground">{counts.project}</span>}</TabsTrigger>
           <TabsTrigger value="store"><StoreIcon aria-hidden="true" />{t("技能商店", "Skill store")}</TabsTrigger>
         </TabsList>}
-        <TabsContent value="global" className={detailOpen ? undefined : "flex min-h-0 flex-1 flex-col overflow-hidden"}><InventoryPage key={inventoryVersion} config={config} project={false} t={t} preferences={view.global} reload={reload} onInstall={destination => startInstall({ destination })} inventoryRevision={inventoryRevision} onMutation={onMutation} onDetailChange={setDetailOpen} getScrollContainer={scrollContainer} toolbarLayout={workspace ? "scroll" : "wrap"} /></TabsContent>
-        <TabsContent value="project" className={detailOpen ? undefined : "flex min-h-0 flex-1 flex-col overflow-hidden"}><InventoryPage key={inventoryVersion} config={config} project t={t} preferences={view.project} reload={reload} onInstall={destination => startInstall({ destination })} inventoryRevision={inventoryRevision} onMutation={onMutation} onDetailChange={setDetailOpen} getScrollContainer={scrollContainer} toolbarLayout={workspace ? "scroll" : "wrap"} /></TabsContent>
+        <TabsContent value="global" className={detailOpen ? undefined : "flex min-h-0 flex-1 flex-col overflow-hidden"}><InventoryPage key={inventoryVersion} config={config} project={false} t={t} preferences={view.global} reload={reload} onInstall={destination => startInstall({ destination })} inventoryRevision={inventoryRevision} onMutation={inventoryMutated} onCount={onCount} onDetailChange={setDetailOpen} getScrollContainer={scrollContainer} toolbarLayout={workspace ? "scroll" : "wrap"} /></TabsContent>
+        <TabsContent value="project" className={detailOpen ? undefined : "flex min-h-0 flex-1 flex-col overflow-hidden"}><InventoryPage key={inventoryVersion} config={config} project t={t} preferences={view.project} reload={reload} onInstall={destination => startInstall({ destination })} inventoryRevision={inventoryRevision} onMutation={inventoryMutated} onCount={onCount} onDetailChange={setDetailOpen} getScrollContainer={scrollContainer} toolbarLayout={workspace ? "scroll" : "wrap"} /></TabsContent>
         <TabsContent value="store" className={detailOpen ? undefined : "flex min-h-0 flex-1 flex-col overflow-hidden"}><SkillStore zh={t("zh", "en") === "zh"} initialPageSize={pageSize} onPageSize={async value => setPageSizeOverride(value)}
           disabled={!hasInstallationTarget(config)} session={store} backend={storeBackend} getScrollContainer={storeScrollContainer} onDetailChange={setDetailOpen} embedded
           onInstall={(source, _agents, skills) => startInstall({ source, skills, destination: { workspace: null } })} /></TabsContent>

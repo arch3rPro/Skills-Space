@@ -1,9 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" fill="none">
-  <path d="M17.2 10.6C13.8 8.5 10.2 8.2 6.5 9.6v16.2c3.7-1.4 7.3-1.1 10.7 1V10.6Z" fill="url(#page-left)"/>
-  <path d="M18.8 10.6c3.4-2.1 7-2.4 10.7-1v16.2c-3.7-1.4-7.3-1.1-10.7 1V10.6Z" fill="url(#page-right)"/>
-  <path d="M18 10.4v16.8" stroke="#D9F8FF" stroke-opacity=".7" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M26 9H15.5C11.6 9 9 11.3 9 14.7c0 3.2 2.4 5.1 6.3 5.1h5.4c3.9 0 6.3 1.9 6.3 5.1 0 3.4-2.6 5.7-6.5 5.7H10" stroke="url(#mark)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="27" cy="9" r="2.7" fill="#70D9F4"/>
+  <circle cx="9" cy="30.6" r="2.7" fill="#6084F7"/>
   <defs>
-    <linearGradient id="page-left" x1="6.5" y1="9" x2="17.5" y2="27" gradientUnits="userSpaceOnUse"><stop stop-color="#6FC6FF"/><stop offset="1" stop-color="#3E59DF"/></linearGradient>
-    <linearGradient id="page-right" x1="18.5" y1="9" x2="29.5" y2="27" gradientUnits="userSpaceOnUse"><stop stop-color="#55E5C2"/><stop offset="1" stop-color="#168FA7"/></linearGradient>
+    <linearGradient id="mark" x1="9" y1="9" x2="27" y2="30.6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#68DDF0"/>
+      <stop offset=".5" stop-color="#4E9BF0"/>
+      <stop offset="1" stop-color="#5967E8"/>
+    </linearGradient>
   </defs>
 </svg>

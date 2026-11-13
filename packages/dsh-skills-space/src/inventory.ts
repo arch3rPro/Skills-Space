@@ -44,8 +44,10 @@ export function skillLifecycle(item: Skill): "managed" | "native" {
 }
 
 export function inventorySourceKey(item: Skill): string {
-  if (skillLifecycle(item) === "managed" && (item.installation?.sourceType || item.installation?.source))
-    return `managed:${skillSourceKind(asInstalled(item))}`;
+  if (skillLifecycle(item) === "managed" && (item.installation?.sourceType || item.installation?.source)) {
+    const kind = skillSourceKind(asInstalled(item));
+    return kind === "local" ? "directory:local" : `managed:${kind}`;
+  }
   const source = item.source.startsWith("project-") ? "project"
     : item.source.startsWith("user-") || item.source.startsWith("configured-") ? "local" : item.source;
   return `directory:${source}`;
