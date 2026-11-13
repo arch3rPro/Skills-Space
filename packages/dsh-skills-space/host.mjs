@@ -437,8 +437,6 @@ export async function apply(ctx) {
             managedUpdateable: removalAllowed && entries !== undefined && cliAddressable
               && ['github', 'gitlab', 'git', 'local', 'well-known'].includes(entry?.sourceType)
               && (entry?.sourceType !== 'git' || typeof entry.sourceUrl === 'string'),
-            managedSyncable: removalAllowed && entries !== undefined && cliAddressable
-              && /^[a-f\d]{40}(?:[a-f\d]{24})?$/i.test(entry?.computedHash || entry?.skillFolderHash || ''),
             managedRemovable: removalAllowed && entries !== undefined && cliAddressable, nativeRemovable: nativePath !== null,
             managed: entries ? managedIds.has(key) : null,
             removable: removalAllowed && entries !== undefined && cliAddressable || nativePath !== null,
@@ -635,10 +633,6 @@ export async function apply(ctx) {
     if (typeof input.skill !== 'string' || !/^[a-f0-9]{64}$/.test(input.skill)) throw new InstallRejection('selection');
     return withInventory(inventoryPreset(null), workspace, signal, async items => {
       const item = items.find(candidate => candidate.key === input.skill);
-      if (action === 'sync-preview') {
-        if (!item?.public.managedSyncable) throw new InstallRejection('sync-unavailable');
-        return managed.reviewSync(target, item.candidate.name);
-      }
       if (!item?.public.managedUpdateable) throw new InstallRejection('update-unavailable');
       return managed.reviewUpdate(target, item.candidate.name, signal);
     });
@@ -653,7 +647,7 @@ export async function apply(ctx) {
         const url = new URL(request.url);
         if (request.method === 'POST') {
           const action = url.searchParams.get('action') ?? 'placement';
-          if (!['placement', 'preview', 'install', 'directories', 'create', 'removal-preview', 'remove', 'reveal', 'policy-preview', 'policy', 'open-configuration', 'open-directory', 'update-preview', 'update', 'sync-preview'].includes(action) || !localWrite(request, action)) return Response.json({ error: 'forbidden' }, { status: 403 });
+          if (!['placement', 'preview', 'install', 'directories', 'create', 'removal-preview', 'remove', 'reveal', 'policy-preview', 'policy', 'open-configuration', 'open-directory', 'update-preview', 'update'].includes(action) || !localWrite(request, action)) return Response.json({ error: 'forbidden' }, { status: 403 });
           const text = await request.text();
           if (text.length > (action === 'placement' ? 256 : 16384)) return Response.json({ error: 'request' }, { status: 400 });
           let input;
@@ -677,7 +671,7 @@ export async function apply(ctx) {
             }catch(error){return Response.json({error:'configuration-open',message:error instanceof Error?error.message:String(error)},{status:503});}
           }
           if (action === 'policy-preview' || action === 'policy') return Response.json(await changePolicy(action, input, request.signal));
-          if (action === 'update-preview' || action === 'update' || action === 'sync-preview') return Response.json(await manageUpdate(action, input, request.signal));
+          if (action === 'update-preview' || action === 'update') return Response.json(await manageUpdate(action, input, request.signal));
           if (['create', 'removal-preview', 'remove', 'reveal'].includes(action)) return Response.json(await manageFiles(action, input, request.signal));
           if (action !== 'placement') {
             const target = await installationTarget(input);

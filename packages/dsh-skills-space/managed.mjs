@@ -302,7 +302,7 @@ export function managedLifecycle(withFileLock) {
       pending.delete(root);
     }
   }
-  async function preview(input, target, signal, { includeInternal = false, captureName = null } = {}) {
+  async function preview(input, target, signal, { includeInternal = false, captureName = null, checkRevisions = null } = {}) {
     if (typeof input !== 'string' || !input.trim() || input.length > 8192) throw new InstallRejection('source');
     const packagePath = require.resolve('skills/package.json');
     const parserResult = await execute(process.execPath, [sourceParser, input.trim().startsWith('~/') ? join(homedir(), input.trim().slice(2)) : input.trim(), packagePath], {
@@ -362,6 +362,7 @@ export function managedLifecycle(withFileLock) {
       const names = new Set();
       const files = new Map();
       const hashes = new Map();
+      const sourceRevisions = new Map();
       const fileDetails = new Map();
       let contents = null;
       let sourceTree = null;
@@ -377,6 +378,12 @@ export function managedLifecycle(withFileLock) {
         names.add(metadata.name);
         if (local) files.set(metadata.name, { path, revision: await reviewRevision(path, { name: metadata.name }) });
         hashes.set(metadata.name, await contentHash(path));
+        const recorded = checkRevisions?.get(metadata.name);
+        if (/^[a-f\d]{40}$/i.test(recorded ?? '')) sourceRevisions.set(metadata.name, [await gitTreeHash(path)]);
+        else if (/^[a-f\d]{64}$/i.test(recorded ?? '')) {
+          const { hash, legacyHash } = await (await originalSkillHashes)(path);
+          sourceRevisions.set(metadata.name, [hash, legacyHash]);
+        }
         fileDetails.set(metadata.name, await fileHashes(path));
         if (metadata.name === captureName) {
           contents = await comparisonFiles(path);
@@ -390,7 +397,7 @@ export function managedLifecycle(withFileLock) {
       for (const [key, plan] of plans) if (plan.expires <= now) plans.delete(key);
       if (plans.size >= 16) plans.delete(plans.keys().next().value);
       const token = randomUUID();
-      plans.set(token, { kind: 'install', source: parsed.type === 'well-known' ? parsed.url : source, files, hashes, fileDetails, contents, sourceTree, sourceLockHashes, target, names, expires: now + previewLifetime, website: parsed.type === 'well-known', download: parsed.type === 'well-known' });
+      plans.set(token, { kind: 'install', source: parsed.type === 'well-known' ? parsed.url : source, files, hashes, sourceRevisions, fileDetails, contents, sourceTree, sourceLockHashes, target, names, expires: now + previewLifetime, website: parsed.type === 'well-known', download: parsed.type === 'well-known' });
       return { token, skills, skillFilter: parsed.skillFilter ?? null, warnings };
     } finally { await rm(directory, { recursive: true, force: true }); }
   }
@@ -497,31 +504,26 @@ export function managedLifecycle(withFileLock) {
     for (const [source, group] of groups) {
       let inspected;
       try {
-        inspected = await preview(source, target, signal);
+        inspected = await preview(source, target, signal, { checkRevisions: new Map(group.map(name => [name, entries[name]?.computedHash || entries[name]?.skillFolderHash])) });
         const plan = plans.get(inspected.token);
         for (const name of group) {
-          const currentRevision = await contentHash(join(root, '.agents/skills', name));
-          const latestRevision = plan?.hashes.get(name) ?? null;
-          result.set(name, { name, status: latestRevision === null ? 'unknown' : latestRevision === currentRevision ? 'current' : 'available', currentRevision, latestRevision });
+          const entry = entries[name];
+          const installed = join(root, '.agents/skills', name);
+          const currentRevision = entry.wellKnownDigest || entry.computedHash || entry.skillFolderHash || null;
+          const revisions = plan?.website && !plan.download ? [plan.digests?.get(name)].filter(Boolean) : plan?.sourceRevisions?.get(name) ?? [];
+          const latestRevision = revisions[0] ?? null;
+          const localMatch = await installedRevisionMatches(installed, entry).catch(() => null);
+          const localState = localMatch === true ? 'clean' : localMatch === false ? 'modified' : 'unverified';
+          result.set(name, { name, status: !currentRevision || !latestRevision ? 'unknown' : revisions.includes(currentRevision) ? 'current' : 'available', localState, currentRevision, latestRevision });
         }
       } catch (error) {
         if (signal?.aborted) throw error;
-        for (const name of group) result.set(name, { name, status: 'unknown', currentRevision: null, latestRevision: null });
+        for (const name of group) result.set(name, { name, status: 'unknown', localState: 'unverified', currentRevision: null, latestRevision: null });
       } finally {
         if (inspected) plans.delete(inspected.token);
       }
     }
     return [...result.values()];
-  }
-  async function reviewSync(target, name) {
-    if (!skillName(name)) throw new InstallRejection('sync-unavailable');
-    const root = target.path ?? homedir();
-    await checkTarget(root);
-    const entries = await managedEntries(target.path);
-    const installed = join(root, '.agents/skills', name);
-    if (!(await fileInfo(join(installed, 'SKILL.md')))?.isFile()
-      || await recordedSnapshotMatches(target, name, entries[name], installed) !== true) throw new InstallRejection('sync-unavailable');
-    return { source: installed, name };
   }
   async function reviewDiff(target, name, expectedRevision, signal) {
     if (!skillName(name) || !/^[a-f\d]{64}$/i.test(expectedRevision)) throw new InstallRejection('diff-unavailable');
@@ -701,5 +703,5 @@ export function managedLifecycle(withFileLock) {
       return { removed, removedIds, failed: removed.length !== skills.length };
     });
   }
-  return { preview, install, checkUpdates, reviewUpdate, update, reviewSync, reviewDiff, diffStatus, reviewRemoval, remove, create, reviewTrash, trash, protectedAgentRoots };
+  return { preview, install, checkUpdates, reviewUpdate, update, reviewDiff, diffStatus, reviewRemoval, remove, create, reviewTrash, trash, protectedAgentRoots };
 }

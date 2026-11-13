@@ -672,7 +672,7 @@ test("HTTPS Git URL and explicit ref are pinned before the original CLI installs
   `, Boolean(archive), true);
 });
 
-test("managed update and sync verify the recorded revision and affect only the selected project", t => {
+test("managed updates verify the recorded revision and affect only the selected project", t => {
   lifecycleFixture(t, `
     import assert from "node:assert/strict";
     import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -689,7 +689,6 @@ test("managed update and sync verify the recorded revision and affect only the s
     const initial = await lifecycle.preview(source, a, signal);
     assert.deepEqual(await lifecycle.install(initial.token, ["update-fixture"], a), { installed: ["update-fixture"], failed: false });
     assert.equal((await lifecycle.checkUpdates(a, ["update-fixture"], signal))[0].status, "current");
-    assert.equal((await lifecycle.reviewSync(a, "update-fixture")).source, join(first, ".agents/skills/update-fixture"));
     assert.equal((await lifecycle.diffStatus(a, "update-fixture")).modified, false);
     await writeFile(file, body("Two"));
     assert.equal((await lifecycle.checkUpdates(a, ["update-fixture"], signal))[0].status, "available");
@@ -700,14 +699,12 @@ test("managed update and sync verify the recorded revision and affect only the s
     assert.deepEqual(await lifecycle.update(review.token, a), { updated: ["update-fixture"], failed: false });
     assert.equal((await lifecycle.checkUpdates(a, ["update-fixture"], signal))[0].status, "current");
     assert.equal(await readFile(join(first, ".agents/skills/update-fixture/SKILL.md"), "utf8"), body("Two"));
-    const sync = await lifecycle.reviewSync(a, "update-fixture");
-    const copied = await lifecycle.preview(sync.source, b, signal);
-    assert.deepEqual(await lifecycle.install(copied.token, [sync.name], b), { installed: ["update-fixture"], failed: false });
+    const copied = await lifecycle.preview(source, b, signal);
+    assert.deepEqual(await lifecycle.install(copied.token, ["update-fixture"], b), { installed: ["update-fixture"], failed: false });
     assert.ok(Object.hasOwn(await managedEntries(second), "update-fixture"));
     const global = { path: null };
     const globalInstall = await lifecycle.preview(source, global, signal);
     assert.deepEqual(await lifecycle.install(globalInstall.token, ["update-fixture"], global), { installed: ["update-fixture"], failed: false });
-    assert.equal((await lifecycle.reviewSync(global, "update-fixture")).name, "update-fixture");
     await writeFile(file, body("Three"));
     assert.equal((await lifecycle.checkUpdates(global, ["update-fixture"], signal))[0].status, "available");
     const globalReview = await lifecycle.reviewUpdate(global, "update-fixture", signal);
@@ -720,13 +717,15 @@ test("managed update and sync verify the recorded revision and affect only the s
     assert.equal(status.modified, true);
     await assert.rejects(lifecycle.reviewDiff(a, "update-fixture", status.revision, signal), { message: "diff-unavailable" });
     await writeFile(file, body("Two"));
+    const localCheck = (await lifecycle.checkUpdates(a, ["update-fixture"], signal))[0];
+    assert.equal(localCheck.status, "current");
+    assert.equal(localCheck.localState, "modified");
     const difference = await lifecycle.reviewDiff(a, "update-fixture", status.revision, signal);
     assert.equal(difference.files.length, 1);
     assert.equal(difference.files[0].path, "SKILL.md");
     assert.match(difference.files[0].diff, /-Two/);
     assert.ok(difference.files[0].diff.includes("+Local edit"));
     await assert.rejects(lifecycle.reviewDiff(a, "update-fixture", "0".repeat(64), signal), { message: "diff-changed" });
-    await assert.rejects(lifecycle.reviewSync(a, "update-fixture"), { message: "sync-unavailable" });
     assert.equal(await readFile(join(second, ".agents/skills/update-fixture/SKILL.md"), "utf8"), body("Two"));
   `, Boolean(archive), true);
 });
