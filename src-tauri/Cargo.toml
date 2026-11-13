@@ -1,6 +1,6 @@
 [package]
 name = "skills-space"
-version = "0.1.0"
+version = "0.2.0"
 description = "Desktop client for the original skills CLI"
 authors = ["Skills Space contributors"]
 edition = "2021"
