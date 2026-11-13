@@ -35,6 +35,7 @@ import { HermesManagement } from "@/components/hermes-management";
 import { hermesActionSkills, hermesCardNotice, hermesReason, mergeHermesStates, type HermesSettings, type HermesEditorHandle } from "@/lib/hermes";
 import { InventoryEmpty } from "@/components/inventory-empty";
 import { InventoryToolbar, InventoryToolbarBatchSelect, InventoryToolbarCheckUpdates, InventoryToolbarFilterTrigger, InventoryToolbarRefresh, InventoryToolbarSearch } from "@/components/inventory-toolbar";
+import { InventoryPagination } from "@/components/inventory-pagination";
 import { dshNativeFilterOptions, DshNativeEmpty } from "@/components/dsh-context-fields";
 import { DshManagement } from "@/components/dsh-management";
 import { DshPolicySwitch, DshPolicyChannels } from "@/components/dsh-policy-controls";
@@ -43,6 +44,7 @@ import { ProjectImportOptions } from "@/components/project-import-options";
 import { skillAgentState, canAgentSkillAction } from "@/lib/agent-skill-actions";
 import { DshBatchControls } from "@/components/dsh-batch-actions";
 import { useWindowFullscreen } from "@/hooks/use-window-fullscreen";
+import { useWideInventoryPageSize } from "@/hooks/use-wide-inventory";
 import { WindowSidebarToolbar } from "@/components/window-sidebar-toolbar";
 import { AlertDialog, AlertDialogContent, AlertDialogBody, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { BulkSelectionBar } from "@/components/bulk-selection-bar";
@@ -989,7 +991,7 @@ function App() {
     setCheckingUpdates(true); setError(""); setUpdates([]);
     try {
       const next = await invoke<UpdateStatus[]>("upstream_check_updates", { target });
-      if (id === request.current) { setUpdates(next); notifySuccess(t("更新检查完成", "Update check complete")); }
+      if (id === request.current) { const count = next.filter(item => item.status === "available").length; setUpdates(next); notifySuccess(count ? t(`${count} 项技能可更新。`, `${count} skills have updates.`) : t("更新检查完成，技能已是最新。", "Update check complete. Skills are up to date.")); }
     }
     catch (reason) { if (id === request.current) setError(String(reason),t("技能更新检查失败，请再次检查更新。","Skill update check failed. Check for updates again.")); }
     finally { setCheckingUpdates(false); }
@@ -1118,6 +1120,22 @@ function App() {
     .filter(skill => [skill.name, skill.description, skill.builtin?.name, skill.builtin?.publisher]
       .some(value => value?.toLowerCase().includes(builtinQuery.trim().toLowerCase())));
   const visibleRows: InventorySkill[] = builtinView ? builtinRows : rows;
+  const wideInventoryPageSize = useWideInventoryPageSize();
+  const [inventoryPageSizeOverride, setInventoryPageSizeOverride] = useState<number | null>(null);
+  const inventoryPageSize = inventoryPageSizeOverride ?? wideInventoryPageSize;
+  const [inventoryPageChoice, setInventoryPageChoice] = useState({ key: "", page: 1 });
+  const inventoryPageKey = JSON.stringify([target.scope, target.projectPath, page, selectedAgent, agentFilter, query, sourceFilter, statusFilter, dshFileFilter, dshPresetFilter, builtinView, builtinFilters.query]);
+  const inventoryScrollPosition = useRef(0);
+  const restoreInventoryScroll = useCallback((node: HTMLDivElement | null) => {
+    if (node) node.scrollTop = inventoryScrollPosition.current;
+  }, []);
+  useEffect(() => {
+    inventoryScrollPosition.current = 0;
+    globalThis.document.getElementById('inventory-list')?.scrollTo({ top: 0 });
+  }, [inventoryPageKey, inventoryPageSize]);
+  const inventoryPageCount = Math.max(1, Math.ceil(visibleRows.length / inventoryPageSize));
+  const inventoryPage = inventoryPageChoice.key === inventoryPageKey ? Math.min(inventoryPageChoice.page, inventoryPageCount) : 1;
+  const cardRows = visibleRows.slice((inventoryPage - 1) * inventoryPageSize, inventoryPage * inventoryPageSize);
   const listLoading = builtinView ? builtin.loading : loading;
   const builtinDetailRequest = documentRequest.current;
   const builtinActionBusy = builtin.loading || builtin.checking || builtin.updating;
@@ -1127,8 +1145,8 @@ function App() {
   }
 
   function skillCards() {
-    return <div className="skill-grid grid auto-rows-fr gap-4" data-pi-config-pending={piConfigPending}>
-      {visibleRows.map((skill) => {
+    return <div className="skill-grid grid auto-rows-fr gap-4" data-inventory-grid data-pi-config-pending={piConfigPending}>
+      {cardRows.map((skill) => {
         const builtIn = skill.builtin;
         const native = !builtIn && skillCollection(skill,activeSkillAgent??undefined)==="agent";
         const displayName = codexNative && native ? codexSkillDisplayName(skill) : skill.name;
@@ -1201,7 +1219,7 @@ function App() {
       </SidebarFooter>
     </Sidebar>
     {macWindow && <WindowSidebarToolbar zh={zh} fullscreen={windowFullscreen} />}
-    <SidebarInset className="desktop-content relative">{!macWindow && <Hint text={t("展开或收起侧栏","Toggle sidebar")}><SidebarTrigger className="absolute left-2 top-0 lg:top-1" aria-label={t("展开或收起侧栏","Toggle sidebar")} /></Hint>}<main id="main-content" tabIndex={-1} className="app-content w-full min-w-0"><div className="app-page mx-auto w-full min-w-0" style={page === "workshop" && workshopWorkbench ? {maxWidth:"none",paddingInline:"1.5rem",paddingBottom:"1rem",height:"100%",display:"flex",flexDirection:"column"} : undefined}>
+    <SidebarInset className="desktop-content relative">{!macWindow && <Hint text={t("展开或收起侧栏","Toggle sidebar")}><SidebarTrigger className="absolute left-2 top-0 lg:top-1" aria-label={t("展开或收起侧栏","Toggle sidebar")} /></Hint>}<main id="main-content" tabIndex={-1} className="app-content subtle-scrollbar w-full min-w-0"><div className={cn("app-page mx-auto w-full min-w-0", !detail && (page === "installed" || page === "discover" || page === "agents" && !codexPluginTab && !piPackageTab) && "app-page-wide")} style={page === "workshop" && workshopWorkbench ? {maxWidth:"none",paddingInline:"1.5rem",paddingBottom:"1rem",height:"100%",display:"flex",flexDirection:"column"} : undefined}>
 
       {builtin.renderUpdateDialog(updated => {
         if (documentIdentity.current && builtinDetailRequest === documentRequest.current && builtinDetail?.id === updated.id) {
@@ -1244,12 +1262,12 @@ function App() {
         <div className="flex min-w-0 items-center gap-3">{activeSkillAgent==="codex"&&codexPluginTab&&codexReturnDetail&&<BackButton label={t("返回技能详情","Back to skill")} disabled={busy} onClick={()=>{setDetail(codexReturnDetail);setCodexReturnDetail(null);setCodexPluginTab(false);}}/>}{page === "agents" && currentAgent && <div className="flex size-10 shrink-0 items-center justify-center"><AgentLogo name={currentAgent.id} size={30} /></div>}<div className="min-w-0"><div className="flex min-w-0 items-center gap-2"><h1 className="truncate text-2xl font-medium tracking-tight">{page === "agents" ? currentAgent?.name ?? t("选择 Agent", "Select an Agent") : labels[page]}</h1>{activeSkillAgent==="pi" && <PiChangeNotice zh={zh}/>}</div>{page === "agents" && <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span className="inline-flex min-w-0 items-center gap-1.5">{target.scope === "project" && <ProjectIcon name={scopeProject?.icon ?? "folder"} className="size-4 shrink-0" />}<span className="truncate">{scopeLabel}</span></span>{agentUnconfirmed && currentAgent && <AgentStatusBadge agent={currentAgent} zh={zh} />}{dshNativeDirectory && target.scope === "project" && inventory?.dsh?.projectRoot && inventory.dsh.projectRoot !== target.projectPath && <Hint text={t("DSH 从父级 Git 仓库根目录发现项目技能。", "DSH discovers project skills from the parent Git repository root.")} focusable><span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><InfoIcon className="size-3.5" aria-hidden="true"/>{t("使用父级 Git 根目录", "Using the parent Git root")}</span></Hint>}{confirmedPluginDirectory && <DirectoryLink path={confirmedPluginDirectory.directory} home={home} zh={zh} disabled={busy} onOpen={path=>void openDirectory(path)}/>}{!(activeSkillAgent === "codex" && codexPluginTab) && !(activeSkillAgent === "pi" && piPackageTab) && <SkillDirectoryMenu directories={headerDirectories} home={home} zh={zh} disabled={busy || loading} onOpen={path=>void openDirectory(path)} />}</p>}</div></div>
       </header>}
       {page === "workshop" && <SkillWorkshop zh={zh} home={home} visibleAgentIds={shownAgents.map(agent=>agent.id)} session={workshopSession.current} onInstall={startInstall} onWorkbenchChange={setWorkshopWorkbench} />}
-      {page === "discover" && <SkillStore zh={zh} initialPageSize={preferences.storePageSize ?? 12} onPageSize={storePageSize => save({...preferencesRef.current, storePageSize}, true)} disabled={busy || saving || !inventory} session={marketplaceSession} onInstall={startInstall} />}
-      {(page === "installed" || page === "agents") && <section className="inventory-content flex flex-col gap-6"><Tabs value={builtinView ? "builtins" : activeSkillAgent==="pi"&&piPackageTab?"pi-packages":activeSkillAgent==="codex"&&codexPluginTab?"plugins":"skills"} className="gap-5" onValueChange={value=>{setBuiltinTab(value==="builtins");setPiPackageTab(value==="pi-packages");setCodexPluginTab(value==="plugins");setCodexReturnDetail(null);setSelected([]);setBulkSelectionMode(false);}}>
+      {page === "discover" && <SkillStore zh={zh} initialPageSize={preferences.storePageSize ?? wideInventoryPageSize} onPageSize={storePageSize => save({...preferencesRef.current, storePageSize}, true)} disabled={busy || saving || !inventory} session={marketplaceSession} onInstall={startInstall} />}
+      {(page === "installed" || page === "agents") && <section className={cn("inventory-content flex flex-col gap-6", !codexPluginTab && !piPackageTab && "inventory-page min-h-0 flex-1 overflow-hidden")}><Tabs value={builtinView ? "builtins" : activeSkillAgent==="pi"&&piPackageTab?"pi-packages":activeSkillAgent==="codex"&&codexPluginTab?"plugins":"skills"} className={cn("gap-5", !codexPluginTab && !piPackageTab && "min-h-0 flex-1 overflow-hidden")} onValueChange={value=>{setBuiltinTab(value==="builtins");setPiPackageTab(value==="pi-packages");setCodexPluginTab(value==="plugins");setCodexReturnDetail(null);setSelected([]);setBulkSelectionMode(false);}}>
         {(page==="installed"||activeSkillAgent==="codex"||activeSkillAgent==="pi")&&!(activeSkillAgent==="pi"&&piPackagePage)&&<TabsList variant="quiet" className="page-tabs inventory-tabs" aria-label={t("管理内容", "Management sections")}><TabsTrigger value="skills"><PackageIcon aria-hidden="true" />{t("技能管理", "Skill management")}<span className="text-xs tabular-nums text-muted-foreground">{allRows.length}</span></TabsTrigger>{page==="installed"&&<TabsTrigger value="builtins"><BookOpenIcon aria-hidden="true"/>{t("内置技能","Built-in skills")}<span className="text-xs tabular-nums text-muted-foreground">{builtin.rows.length || null}</span></TabsTrigger>}{activeSkillAgent==="codex"&&<TabsTrigger value="plugins"><PackageIcon aria-hidden="true"/>{t("插件管理","Plugins")}<span className="text-xs tabular-nums text-muted-foreground">{codex.loading ? <LoaderCircleIcon className="size-3 animate-spin motion-reduce:animate-none" aria-label={t("读取插件数量","Loading plugin count")}/> : codex.snapshot?.catalogRequested && codex.snapshot.pluginsComplete && !codex.snapshot.unavailableReason ? installedCodexPluginCount(codex.snapshot.plugins) : null}</span></TabsTrigger>}{activeSkillAgent==="pi"&&<TabsTrigger value="pi-packages"><PackageIcon aria-hidden="true"/>{t("插件管理","Plugins")}<span className="text-xs tabular-nums text-muted-foreground">{piPackageSummary.loading?<LoaderCircleIcon className="size-3 animate-spin motion-reduce:animate-none" aria-label={t("读取扩展包数量","Loading package count")}/>:piPackageSummary.count}</span></TabsTrigger>}</TabsList>}
         {activeSkillAgent==="codex"&&<TabsContent value="plugins"><CodexManagement checkingUpdates={codex.checkingUpdates} onCheckAll={()=>void codex.checkPlugins()} onUpdate={codex.reviewPluginUpdate} project={target.scope==="project"} onMarkets={()=>setCodexMarkets(true)} onAdd={()=>setCodexAdding(true)} source={codexPluginSource} setSource={setCodexPluginSource} status={codexPluginStatus} setStatus={setCodexPluginStatus} onOpen={plugin=>{setCodexReturnDetail(null);setCodexPluginPage({id:plugin.id});}} checks={codex.checks} zh={zh} snapshot={codex.snapshot} loading={codex.loading||loading} disabled={busy||saving} query={codexPluginQuery} onQuery={setCodexPluginQuery} onRefresh={()=>void codex.load(true)} onAction={codex.plugin} onBatch={codex.pluginBatch} /></TabsContent>}
         {activeSkillAgent==="pi"&&<TabsContent forceMount value="pi-packages" className="data-[state=inactive]:hidden"><PiExtensions onOpenDirectory={path=>void openDirectory(path)} filterSession={filterSession} key={`${target.scope}:${target.projectPath??""}`} cache={piPackageCache} states={piSettings?.skills??[]} skills={inventory?.skills??[]} onSkill={skill=>void openDetail(skill)} selected={piPackagePage} onSelect={setPiPackagePage} active={piPackageTab} onSummary={setPiPackageSummary} target={target} home={home} zh={zh} disabled={busy||saving} onBusy={setBusy} onChanged={()=>void refresh()} onSettings={()=>guardPi(()=>{setSettingsCodex(false);setSettingsDsh(false);setSettingsHermes(false);setSettingsSection("agents");setSettingsPi(true);applyNavigation("settings");})}/></TabsContent>}
-        <TabsContent value={builtinView ? "builtins" : "skills"} className="flex flex-col gap-4">
+        <TabsContent value={builtinView ? "builtins" : "skills"} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         {builtinView ? <InventoryToolbar><div className="toolbar-filters flex min-w-0 flex-1 items-center gap-2"><InventoryToolbarSearch label={t("搜索内置技能", "Search built-in skills")} placeholder={t("搜索…", "Search…")} value={builtinFilters.query} onChange={query=>patchBuiltinFilters({query})} /><InventoryToolbarRefresh label={t("刷新", "Refresh")} busy={builtin.loading} disabled={busy || builtin.loading || builtin.updating} onClick={()=>void builtin.load()} /></div><div className="toolbar-actions ml-auto flex shrink-0 items-center gap-2"><InventoryToolbarCheckUpdates label={t("检查更新", "Check updates")} checking={builtin.checking} disabled={busy || builtin.checking || builtin.loading || builtin.updating || builtin.failed} onClick={()=>void builtin.check()} /></div></InventoryToolbar> :         <InventoryToolbar>
           <div className="toolbar-filters flex min-w-0 flex-1 items-center gap-2">
             <InventoryToolbarSearch label={t("搜索已安装技能", "Search installed skills")} placeholder={t("搜索…", "Search…")} value={query} onChange={setQuery} />
@@ -1281,6 +1299,7 @@ function App() {
           {codexNative && codexBatchControls()}
           {dshNativeBatch && <DshBatchControls skills={selectedDshSkills} target={target} contextKey={dshContextKey} revision={inventory?.dsh?.revision??''} policyRevision={inventory?.dsh?.policy?.revision??''} home={home} disabled={busy} zh={zh} onBusy={setBusy} onSnapshot={applyDshSnapshot} onChanged={removed=>{setSelected(current=>current.filter(path=>!selectedDshSkills.some(skill=>removed.includes(skill.dshState?.file??"")&&skill.path===path)));void refresh(target,true);}} allowRemoval={selectedNativeDshRemoval} removalLabel={!!selectedManagedNames.length?t("移至废纸篓","Move to Trash"):undefined} />}
         </BulkSelectionBar>}
+        <div id="inventory-list" ref={restoreInventoryScroll} className="app-content inventory-card-scrollbar min-w-0 p-1" onScroll={event => { inventoryScrollPosition.current = event.currentTarget.scrollTop; }}>
         {listLoading && <LoadingCards variant="inventory" className="skill-grid" label={builtinView ? t("正在读取内置技能…", "Loading built-in skills…") : t("正在读取安装状态…", "Reading installed state…")} />}
         {!builtinView && !loading && !rows.length && dshUseEmpty && inventory?.dsh && <DshNativeEmpty snapshot={inventory.dsh} zh={zh} disabled={busy||saving} unreadable={dshUnreadablePreset} onOpenConfiguration={path=>void invoke("upstream_dsh_open_configuration",{target,configurationPath:path}).catch(reason=>setError(String(reason),t("配置文件无法打开","Could not open the configuration file")))} onRefresh={()=>void refresh()}/>}
         {!listLoading && !visibleRows.length && (builtinView || !dshUseEmpty) && <InventoryEmpty
@@ -1291,6 +1310,8 @@ function App() {
           onAdd={() => startInstall("", page === "agents" && selectedAgent ? [selectedAgent] : [])}
         />}
         {visibleRows.length > 0 && (builtinView ? !listLoading : !dshNativeDirectory || !loading) && skillCards()}
+        </div>
+        {visibleRows.length > 12 && (builtinView ? !listLoading : !dshNativeDirectory || !loading) && <InventoryPagination key={`${inventoryPageKey}:${inventoryPageSize}`} pages={inventoryPageCount} page={inventoryPage} size={inventoryPageSize} zh={zh} pageDisabled={busy || listLoading} onPage={next => {setInventoryPageChoice({key:inventoryPageKey,page:next});inventoryScrollPosition.current=0;globalThis.document.getElementById('inventory-list')?.scrollTo({top:0});}} onSize={size=>{setInventoryPageSizeOverride(size);setInventoryPageChoice({key:inventoryPageKey,page:1});inventoryScrollPosition.current=0;globalThis.document.getElementById('inventory-list')?.scrollTo({top:0});}} />}
 
       </TabsContent></Tabs></section>}
       {page === "settings" && <section className="settings-page mx-auto flex w-full max-w-4xl flex-col" aria-label={labels.settings}>

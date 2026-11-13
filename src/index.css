@@ -174,6 +174,7 @@ html, body, #root { height: 100%; overflow: hidden; overscroll-behavior: none; }
 
 /* Approved Codex-inspired page composition; native titlebar safety rules stay below. */
 .app-page { max-width: 78rem; padding: 1rem 3rem 3rem; }
+.app-page-wide { max-width: 92.5rem; }
 .app-page :where(h1) { font-size: 1.75rem; font-weight: 500; line-height: 1.3; letter-spacing: -.035em; }
 .page-heading { margin-bottom: 2rem; }
 .skill-detail-metadata { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem 2rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--border); }
@@ -199,6 +200,9 @@ html, body, #root { height: 100%; overflow: hidden; overscroll-behavior: none; }
 }
 @container skill-inventory (min-width: 800px) {
     .skill-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container skill-inventory (min-width: 1160px) {
+    .skill-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .agent-picker > label { content-visibility: auto; contain-intrinsic-size: auto 56px; }
@@ -279,6 +283,9 @@ html, body, #root { height: 100%; overflow: hidden; overscroll-behavior: none; }
 @supports selector(::-webkit-scrollbar) {
     .subtle-scrollbar { scrollbar-width: auto; }
 }
+/* Card grids scroll in both WebKit and Chromium without different native scrollbar tracks. */
+.inventory-card-scrollbar { scrollbar-width: none; }
+.inventory-card-scrollbar::-webkit-scrollbar { display: none; }
 .appearance-settings { container: appearance / inline-size; }
 .appearance-settings .settings-fields > [data-slot="field"] { padding-block: .75rem; }
 .appearance-theme-group { display: grid; grid-template-columns: 8rem minmax(0,1fr); gap: 1.5rem; padding-block: .75rem; }
@@ -491,5 +498,7 @@ body[data-design-preview] {
 :is(.filter-trigger, .choice-fit) [data-slot="filter-sizer"] { display: grid; visibility: hidden; overflow: hidden; pointer-events: none; }
 :is(.filter-trigger, .choice-fit) [data-slot="filter-sizer"] > span { grid-area: 1 / 1; white-space: nowrap; }
 
-/* Store keeps pagination visible while its card collection scrolls. */
-.app-page:has(> .store-page) { height: 100%; display: flex; flex-direction: column; padding-bottom: 1rem; }
+/* Store and skill management keep pagination visible while their cards scroll. */
+.app-page:has(> :is(.store-page, .inventory-page)) { height: 100%; display: flex; flex-direction: column; padding-bottom: 1rem; }
+
+.app-page:has(> .inventory-page) > .page-heading { flex-shrink: 0; }

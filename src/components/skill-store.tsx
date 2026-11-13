@@ -1,8 +1,8 @@
 import { websiteIntroduction } from "@/lib/website-document";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { ActivityIcon, ArrowDownRightIcon, ArrowUpRightIcon, MinusIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, ExternalLinkIcon, GitBranchIcon, Globe2Icon, LoaderCircleIcon, PackagePlusIcon, RefreshCwIcon, SearchIcon, StarIcon, TagsIcon, XIcon } from 'lucide-react';
+import { ActivityIcon, ArrowDownRightIcon, ArrowUpRightIcon, MinusIcon, DownloadIcon, ExternalLinkIcon, GitBranchIcon, Globe2Icon, LoaderCircleIcon, PackagePlusIcon, RefreshCwIcon, SearchIcon, StarIcon, TagsIcon, XIcon } from 'lucide-react';
 import { SkillDetail, SkillDetailHeader, SkillDetailMetadata, SkillMetadataField } from '@/components/skill-detail';
 import { Button } from '@/components/ui/button';
 
@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { NativeSelect, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { InventoryPagination } from '@/components/inventory-pagination';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { InventoryCard, InventoryCardHeader, InventoryCardFooter } from '@/components/inventory-card';
 import { OverflowText } from '@/components/overflow-text';
@@ -49,6 +49,7 @@ type Props = {
   backend?: SkillStoreBackend;
   embedded?: boolean;
   getScrollContainer?: () => HTMLElement | null;
+  onDetailChange?: (open: boolean) => void;
 };
 const scrollContainer = () => document.getElementById('store-list') ?? document.getElementById('main-content');
 
@@ -117,7 +118,7 @@ function StoreCards({ skills, metric, descriptions, loadDescription, disabled, i
   })}</div>;
 }
 
-export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session, onInstall, backend = desktopBackend, embedded = false, getScrollContainer = scrollContainer }: Props) {
+export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session, onInstall, backend = desktopBackend, embedded = false, getScrollContainer = scrollContainer, onDetailChange }: Props) {
   const [loadDocument] = useState(() => session.current.documentLoader ??= createResourceLoader(session.current.documents, id => backend.document(id, false)));
   const [loadDescription] = useState(() => session.current.descriptionLoader ??= createDescriptionLoader(session.current.descriptions, async id => {
     const document = await loadDocument(id);
@@ -135,7 +136,6 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
   const [query, setQuery] = useState(session.current.query);
   const [owner, setOwner] = useState(session.current.owner);
   const [ownerDraft, setOwnerDraft] = useState(session.current.owner);
-  const [jumpPage, setJumpPage] = useState('');
   const [ownerOpen, setOwnerOpen] = useState(false);
   const [composing, setComposing] = useState(false);
   const [boardResult, setBoardResult] = useState<{ key: string; data: MarketplacePage } | null>(null);
@@ -146,6 +146,7 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
   const [error, reportError] = useFeedbackError(zh);
   const [detailError, reportDetailError] = useFeedbackError(zh);
   const [detail, setDetail] = useState<Detail | null>(null);
+  useLayoutEffect(() => onDetailChange?.(detail !== null), [detail !== null, onDetailChange]);
   const detailRequest = useRef(0);
   const detailLease = useRef<DescriptionRequest | null>(null);
   const scrollPosition = useRef(0);
@@ -168,7 +169,7 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
   const previousSearch = searching && !searchData ? searchResult : null;
 
   useEffect(() => { if (initialPageSize !== pageSize) { setPageSize(initialPageSize); setPage(1); setSearchWindow({ key: searchKey, page: 1 }); } }, [initialPageSize]);
-  useEffect(() => { setJumpPage(''); getScrollContainer()?.scrollTo({ top: 0 }); }, [board, query, owner, pageSize]);
+  useEffect(() => { getScrollContainer()?.scrollTo({ top: 0 }); }, [board, query, owner, pageSize]);
   useEffect(() => { setSearchWindow(previous => previous.key !== searchKey || previous.page !== searchWindowData.page ? { key: searchKey, page: searchWindowData.page } : previous); }, [searchKey, searchWindowData.page]);
   useEffect(() => { session.current.searchPage = { key: searchKey, page: searchWindowData.page }; }, [session, searchKey, searchWindowData.page]);
   useEffect(() => { session.current.board = board; session.current.page = page; session.current.query = query; session.current.owner = owner; }, [board, page, query, owner, session]);
@@ -299,7 +300,6 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
     void onPageSize(Number(value)).catch(reason => reportError(String(reason), t('每页数量未保存，请重试。', 'Could not save page size. Try again.')));
   }
   function changePage(value: number) {
-    setJumpPage('');
     if (searching) setSearchWindow({ key: searchKey, page: value }); else setPage(value);
     getScrollContainer()?.scrollTo({ top: 0 });
   }
@@ -348,20 +348,14 @@ export function SkillStore({ zh, initialPageSize, onPageSize, disabled, session,
       <span role="status">{draft.trim().length === 1 ? t('至少输入 2 个字符进行搜索', 'Enter at least 2 characters to search') : previousSearch ? t(`“${query}”${error ? '未加载' : '正在搜索'}；下方为上次“${previousSearch.query}”${previousSearch.owner ? `（${previousSearch.owner}）` : ''}的结果`, `“${query}” ${error ? 'could not be loaded' : 'is loading'}; showing previous results for “${previousSearch.query}”${previousSearch.owner ? ` (${previousSearch.owner})` : ''}`) : loading ? t('正在搜索…', 'Searching…') : searching && searchData ? t(`“${query}” · ${searchData.length} 项${searchData.length === 100 ? '（最多显示 100 项）' : ''}`, `“${query}” · ${searchData.length} results${searchData.length === 100 ? ' (up to 100)' : ''}`) : null}</span>
       <div className="flex items-center gap-2">{error && (!embedded || Boolean(items?.length)) && <Button size="sm" variant="outline" onClick={refresh}>{t('重试', 'Retry')}</Button>}{searching && <Popover open={ownerOpen} onOpenChange={setOwnerOpen}><PopoverTrigger asChild><Button size="sm" variant="ghost">{owner || t('来源', 'Source')}</Button></PopoverTrigger><PopoverContent><form className="flex flex-col gap-3" onSubmit={event => { event.preventDefault(); setOwner(ownerDraft.trim()); setOwnerOpen(false); }}><Field><FieldLabel htmlFor="store-owner">{t('GitHub 用户或组织', 'GitHub user or organization')}</FieldLabel><Input id="store-owner" value={ownerDraft} maxLength={39} onChange={event => setOwnerDraft(event.target.value)} /></Field><div className="flex justify-end gap-2">{owner && <Button variant="ghost" onClick={() => { setOwner(''); setOwnerDraft(''); setOwnerOpen(false); }}>{t('清除', 'Clear')}</Button>}<Button type="submit">{t('应用', 'Apply')}</Button></div></form></PopoverContent></Popover>}</div>
     </div>}
-    <div id="store-list" className="app-content min-w-0">
+    <div id="store-list" className="app-content inventory-card-scrollbar min-w-0 p-1">
     {initialLoading ? <LoadingCards variant="inventory" count={6} label={searching ? t('正在搜索…', 'Searching…') : t('正在读取排行榜…', 'Loading leaderboard…')} className="skill-grid" />
       : items?.length ? <StoreCards getScrollContainer={getScrollContainer} key={reload} skills={shownItems ?? []} metric={searching ? 'search' : board} descriptions={session.current.descriptions} loadDescription={loadDescription} zh={zh} disabled={installDisabled} installingSource={installingSource} onInstall={skill => void installSkill(skill)} onOpen={skill => void inspectDetail(skill, searching ? 'search' : board, getScrollContainer()?.scrollTop ?? 0)} />
       : <Empty className="min-h-64"><EmptyHeader><EmptyMedia variant="icon"><SearchIcon aria-hidden="true" /></EmptyMedia><EmptyTitle>{error ? t('无法加载技能', 'Could not load skills') : searching ? t('未找到匹配的技能', 'No matching skills') : t('暂无技能', 'No skills')}</EmptyTitle>{searching && !error && <EmptyDescription>{t('试试其他关键词，或清除来源筛选。', 'Try another keyword or clear the source filter.')}</EmptyDescription>}</EmptyHeader><EmptyContent>{error ? <Button variant="outline" onClick={refresh}>{t('重试', 'Retry')}</Button> : searching && <Button variant="outline" onClick={clearSearch}>{t('返回排行榜', 'Back to leaderboard')}</Button>}</EmptyContent></Empty>}
     </div>
-    <nav className="flex shrink-0 flex-wrap items-center justify-center gap-3" aria-label={searching ? t('搜索结果分页', 'Search results pagination') : t('榜单分页', 'Leaderboard pagination')}>
-      {embedded ? <NativeSelect value={pageSize} disabled={loading || disabled} aria-label={t('每页数量', 'Items per page')} onChange={event => selectPageSize(event.target.value)}>
-        {[12,24,48].map(size => <option key={size} value={size}>{t(`${size} 项 / 页`, `${size} / page`)}</option>)}
-      </NativeSelect> : <Select value={String(pageSize)} disabled={loading || disabled} onValueChange={selectPageSize}><SelectTrigger aria-label={t('每页数量', 'Items per page')}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{[12,24,48].map(size => <SelectItem key={size} value={String(size)}>{t(`${size} 项 / 页`, `${size} / page`)}</SelectItem>)}</SelectGroup></SelectContent></Select>}
-      <Button size="icon" variant="outline" aria-label={t('上一页', 'Previous page')} disabled={!hasPageCount || currentPage <= 1 || loading} onClick={() => changePage(currentPage - 1)}><ChevronLeftIcon aria-hidden="true" /></Button>
-      <span className="text-sm tabular-nums text-muted-foreground">{currentPage} / {hasPageCount ? totalPages : '—'}</span>
-      <Button size="icon" variant="outline" aria-label={t('下一页', 'Next page')} disabled={!hasPageCount || currentPage >= totalPages || loading} onClick={() => changePage(currentPage + 1)}><ChevronRightIcon aria-hidden="true" /></Button>
-      <form className="flex items-center gap-2" onSubmit={event => { event.preventDefault(); const value = Number(jumpPage); if (Number.isInteger(value) && value >= 1 && value <= totalPages && hasPageCount && !loading) changePage(value); }}><Field orientation="horizontal"><FieldLabel htmlFor="store-jump-page" className="sr-only">{t('跳转页码', 'Go to page')}</FieldLabel><Input id="store-jump-page" className="w-20" type="number" inputMode="numeric" min={1} max={totalPages} step={1} required value={jumpPage} placeholder={t('页码', 'Page')} disabled={loading || !hasPageCount} onChange={event => setJumpPage(event.target.value)} /><Button size="sm" variant="outline" type="submit" disabled={loading || !hasPageCount || !jumpPage}>{t('跳转', 'Go')}</Button></Field></form>
-    </nav>
+    <InventoryPagination key={`${board}:${query}:${owner}:${pageSize}`} page={currentPage} pages={hasPageCount ? totalPages : null} size={pageSize} zh={zh} embedded={embedded}
+      label={searching ? t('搜索结果分页', 'Search results pagination') : t('榜单分页', 'Leaderboard pagination')}
+      pageDisabled={loading} sizeDisabled={loading || disabled} onPage={changePage} onSize={value => selectPageSize(String(value))} />
     {loading && items && <span className="sr-only" role="status"><LoaderCircleIcon aria-hidden="true" />{t('正在刷新…', 'Refreshing…')}</span>}
   </section>;
 }
