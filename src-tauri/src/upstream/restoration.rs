@@ -1441,6 +1441,7 @@ mod tests {
             .cli(
                 &[
                     "experimental_sync".into(),
+                    "--no-frozen-lockfile".into(),
                     "--copy".into(),
                     "--no-cleanup".into(),
                     "--no-remote".into(),
@@ -1451,7 +1452,7 @@ mod tests {
                 &t,
             )
             .unwrap();
-        assert!(sync.success, "{}", sync.stderr);
+        assert!(sync.success, "stdout: {}; stderr: {}", sync.stdout, sync.stderr);
         fs::remove_dir_all(project.join(".agents/skills/locked-dependency")).unwrap();
         source(
             &project.join("node_modules/@scope/extra/skills/extra"),
@@ -1535,6 +1536,7 @@ mod tests {
             .cli(
                 &[
                     "experimental_sync".into(),
+                    "--no-frozen-lockfile".into(),
                     "--copy".into(),
                     "--no-cleanup".into(),
                     "--no-remote".into(),
@@ -1545,7 +1547,7 @@ mod tests {
                 &t,
             )
             .unwrap();
-        assert!(output.success);
+        assert!(output.success, "stdout: {}; stderr: {}", output.stdout, output.stderr);
         let plan = prepare(&engine, &t).unwrap().plan;
         let path = project.join("skills-lock.json");
         let original = fs::read(&path).unwrap();
@@ -1593,6 +1595,7 @@ mod tests {
             .cli(
                 &[
                     "experimental_sync".into(),
+                    "--no-frozen-lockfile".into(),
                     "--copy".into(),
                     "--no-cleanup".into(),
                     "--no-remote".into(),
@@ -1671,6 +1674,7 @@ mod tests {
                 e.cli(
                     &[
                         "experimental_sync".into(),
+                        "--no-frozen-lockfile".into(),
                         "--copy".into(),
                         "--no-cleanup".into(),
                         "--no-remote".into(),
