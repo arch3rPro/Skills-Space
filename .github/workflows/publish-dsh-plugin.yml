@@ -1,0 +1,31 @@
+name: Publish DSH companion plugin (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: Build companion plugin
+        run: pnpm --dir packages/dsh-skills-space run build
+      - name: Pack built plugin
+        run: |
+          version=$(node -p "require('./packages/dsh-skills-space/package.json').version")
+          npm pack ./packages/dsh-skills-space --ignore-scripts --pack-destination "$RUNNER_TEMP"
+          echo "DSH_COMPANION_TARBALL=$RUNNER_TEMP/dsh-skills-space-$version.tgz" >> "$GITHUB_ENV"
+      - name: Verify packed plugin
+        run: node --experimental-strip-types --test --test-name-pattern='packed DSH plugin|final archive' scripts/dsh-companion-plugin.test.mjs
+      - name: Publish verified package
+        run: npm publish "$DSH_COMPANION_TARBALL" --access public --ignore-scripts

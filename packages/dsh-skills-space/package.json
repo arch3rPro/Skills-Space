@@ -2,6 +2,14 @@
   "name": "dsh-skills-space",
   "version": "0.2.2",
   "description": "Find, install, and browse DeepSeek Harness skills in Skills Space.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arch3rPro/Skills-Space.git",
+    "directory": "packages/dsh-skills-space"
+  },
+  "homepage": "https://github.com/arch3rPro/Skills-Space#readme",
+  "bugs": "https://github.com/arch3rPro/Skills-Space/issues",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build --config vite.config.mts && node ../../scripts/stage-dsh-companion.mjs",
